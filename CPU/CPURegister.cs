@@ -9,6 +9,14 @@ namespace Disassembler.CPU
 	{
 		private uint uiValue = 0;
 
+		public CPURegister()
+		{ }
+
+		public CPURegister(uint value)
+		{
+			this.uiValue = value;
+		}
+
 		public byte Low
 		{
 			get

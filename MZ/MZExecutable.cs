@@ -51,7 +51,7 @@ namespace Disassembler.MZ
 		// 0x1A - Overlay, word (Value used for overlay management. If zero, this is the main executable.)
 		protected int iOverlayIndex = -1;
 		// actual code or data
-		protected List<byte> aData = new List<byte>();
+		protected byte[] aData = new byte[0];
 		// relocation data
 		protected List<MZRelocationItem> aRelocations = new List<MZRelocationItem>();
 		// overlays
@@ -126,7 +126,7 @@ namespace Disassembler.MZ
 			stream.Seek(position + (iHeaderSize << 4), SeekOrigin.Begin);
 			byte[] buffer = new byte[iDataSize];
 			stream.Read(buffer, 0, iDataSize);
-			exe.aData = new List<byte>(buffer);
+			exe.aData = buffer;
 
 			return (iPages << 9);
 		}
@@ -250,9 +250,10 @@ namespace Disassembler.MZ
 			set { this.iOverlayIndex = value; }
 		}
 
-		public List<byte> Data
+		public byte[] Data
 		{
 			get { return this.aData; }
+			set { this.aData = value; }
 		}
 
 		public List<MZRelocationItem> Relocations

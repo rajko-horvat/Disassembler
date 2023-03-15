@@ -9,25 +9,10 @@ namespace Disassembler.CPU
 {
 	public class CPUMemory
 	{
-		#region Data block
-		#endregion
-
 		private BDictionary<uint, CPUMemoryBlock> aBlocks = new BDictionary<uint, CPUMemoryBlock>();
 
 		public CPUMemory()
 		{
-			/*CPUMemoryBlock oBlock = new CPUMemoryBlock((ushort)0x1010, 0, 0x3e00);
-			oBlock.CopyData(0x1010, 0, this.abData, 0, 0x3e00);
-			oBlock.Protected.Add(new CPUMemoryRegion((ushort)0x1020, 0, 0x2650));
-			aBlocks.Add(oBlock);*/
-
-			//oBlock = new MemoryBlock((ushort)0x12a7, 0, 0x1490);
-			//oBlock.CopyData(0x12a7, 0, this.abData, 0x2970, 0x1490);
-			/*oBlock.Protected.Add(new MemoryRegion((ushort)0x12a7, 0x9a, 1));
-			oBlock.Protected.Add(new MemoryRegion((ushort)0x12a7, 0x9c, 2));*/
-			//oBlock.Protected.Add(new MemoryRegion((ushort)0x12a7, 0xa4, 1));
-			//oBlock.Protected.Add(new MemoryRegion((ushort)0x12a7, 0xa6, 0x200));
-			//aBlocks.Add(oBlock);
 		}
 
 		public BDictionary<uint, CPUMemoryBlock> Blocks

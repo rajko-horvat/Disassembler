@@ -23,21 +23,41 @@ internal class Program
 
 		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\civ.exe");
 
+		Memory oMemory = new Memory();
+		ushort usSegment;
+		oMemory.AllocateParagraphs(0x10, out usSegment);
+		oMemory.AllocateBlock(mzEXE.Data.Length, out usSegment);
+		oMemory.WriteBlock(usSegment, 0, mzEXE.Data, 0, mzEXE.Data.Length);
+		oMemory.AllocateParagraphs((ushort)mzEXE.MinimumAllocation, out usSegment);
+
 		// decode EXE packer
-		int iAX = 0;
-		int iDS = mzEXE.InitialCS;
-/*mov word_3A0D_4, ax
-add ax, word_3A0D_C
-mov es, ax
-mov cx, word_3A0D_6
-mov di, cx
-dec di
-mov si, di
-std
-rep movsb
-push ax
-push 32h
-retf*/
+		CPURegister rES = new CPURegister(0);
+		CPURegister rDS = new CPURegister(0);
+		CPURegister rCS = new CPURegister((uint)mzEXE.InitialCS + 0x10);
+		CPURegister rAX = new CPURegister(0);
+		CPURegister rCX = new CPURegister();
+		CPURegister rDI = new CPURegister();
+		CPURegister rSI = new CPURegister();
+
+		rAX.Word = rES.Word;
+		rAX.Word += 0x10;
+		rDS.Word = rCS.Word;
+		oMemory.WriteWord(rDS.Word, 0x4, rAX.Word);
+		rAX.Word += oMemory.ReadWord(rDS.Word, 0xc);
+		rES.Word = rAX.Word;
+		rCX.Word = oMemory.ReadWord(rDS.Word, 0x6);
+		rDI.Word = rCX.Word;
+		rDI.Word--;
+		rSI.Word = rDI.Word;
+		while (rCX.Word != 0)
+		{
+			oMemory.WriteByte(rES.Word, rDI.Word, oMemory.ReadByte(rDS.Word, rSI.Word));
+			rDI.Word--;
+			rSI.Word--;
+			rCX.Word--;
+		}
+		
+		// CS:IP = AX:0x32
 
 		// load libraries and modules
 		CModule oModule = new CModule(@"..\..\..\..\Borland\Installed1\BORLANDC\LIB\C0WL.obj");
