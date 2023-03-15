@@ -16,14 +16,14 @@ namespace Disassembler.MZ
 		private int iSegment;
 
 		public MZRelocationItem(int offset, int segment)
-		{ 
+		{
 			this.iOffset = offset;
 			this.iSegment = segment;
 		}
 
 		public int Offset
 		{
-			get { return iOffset; } 
+			get { return iOffset; }
 		}
 
 		public int Segment
@@ -36,14 +36,6 @@ namespace Disassembler.MZ
 	{
 		// 0x00 - Signature, word (0x5A4D (ASCII for 'M' and 'Z'))
 		protected int iSignature = -1;
-		// 0x02 - Extra bytes, word (Number of bytes in the last page.)
-		protected int iExtraBytes = -1;
-		// 0x04 - Pages, word (Number of whole/partial pages.)
-		protected int iPages = -1;
-		// 0x06 - Relocation items, word (Number of entries in the relocation table.)
-		protected int iRelocationItems = -1;
-		// 0x08 - Header size, word (The number of paragraphs taken up by the header. It can be any value, as the loader just uses it to find where the actual executable data starts. It may be larger than what the "standard" fields take up, and you may use it if you want to include your own header metadata, or put the relocation table there, or use it for any other purpose.)
-		protected int iHeaderSize = -1;
 		// 0x0A - Minimum allocation, word (The number of paragraphs required by the program, excluding the PSP and program image. If no free block is big enough, the loading stops.)
 		protected int iMinimumAllocation = -1;
 		// 0x0C - Maximum allocation, word (The number of paragraphs requested by the program. If no free block is big enough, the biggest one possible is allocated.)
@@ -52,24 +44,18 @@ namespace Disassembler.MZ
 		protected int iInitialSS = -1;
 		// 0x10 - Initial SP, word (Initial value for SP.)
 		protected int iInitialSP = -1;
-		// 0x12 - Checksum, word (When added to the sum of all other words in the file, the result should be zero.)
-		protected int iChecksum = -1;
 		// 0x14 - Initial IP, word (Initial value for IP.)
 		protected int iInitialIP = -1;
 		// 0x16 - Initial CS, word (Relocatable segment address for CS.)
 		protected int iInitialCS = -1;
-		// 0x18 - Relocation table, word (The (absolute) offset to the relocation table.)
-		protected int iRelocationTableOffset = -1;
 		// 0x1A - Overlay, word (Value used for overlay management. If zero, this is the main executable.)
-		protected int iOverlay = -1;
-		// 0x1C - Overlay information, N/A (Files sometimes contain extra information for the main's program overlay management.)
-		protected byte[] aHeaderData = new byte[0];
+		protected int iOverlayIndex = -1;
 		// actual code or data
-		protected byte[] aData = new byte[0];
+		protected List<byte> aData = new List<byte>();
 		// relocation data
-		protected MZRelocationItem[] aRelocations = new MZRelocationItem[0];
+		protected List<MZRelocationItem> aRelocations = new List<MZRelocationItem>();
 		// overlays
-		protected List<MZExecutable> aOverlays= new List<MZExecutable>();
+		protected List<MZExecutable> aOverlays = new List<MZExecutable>();
 
 		protected MZExecutable()
 		{ }
@@ -80,24 +66,21 @@ namespace Disassembler.MZ
 
 		public MZExecutable(Stream stream)
 		{
-			ReadHeader(stream, this);
-			int iFilePosition = this.iPages << 9;
-
-			stream.Seek(iFilePosition, SeekOrigin.Begin);
+			int iFilePosition = 0;
+			iFilePosition += ReadHeader(stream, iFilePosition, this);
 
 			// load overlays
-			while (stream.Position < stream.Length)
+			while (iFilePosition < stream.Length)
 			{
 				MZExecutable overlay = new MZExecutable();
-				ReadHeader(stream, overlay);
+				stream.Seek(iFilePosition, SeekOrigin.Begin);
+				iFilePosition += ReadHeader(stream, iFilePosition, overlay);
 
 				this.aOverlays.Add(overlay);
-				iFilePosition += overlay.iPages << 9;
-				stream.Seek(iFilePosition, SeekOrigin.Begin);
 			}
 		}
 
-		private static void ReadHeader(Stream stream, MZExecutable exe)
+		private static int ReadHeader(Stream stream, int position, MZExecutable exe)
 		{
 			// load header
 			exe.iSignature = ReadUInt16(stream);
@@ -106,40 +89,49 @@ namespace Disassembler.MZ
 				throw new Exception("Not an MS-DOS executable file");
 			}
 
-			exe.iExtraBytes = ReadUInt16(stream);
-			exe.iPages = ReadUInt16(stream);
-			exe.iRelocationItems = ReadUInt16(stream);
-			exe.iHeaderSize = ReadUInt16(stream);
+			// 0x02 - Extra bytes, word (Number of bytes in the last page.)
+			int iExtraBytes = ReadUInt16(stream);
+			// 0x04 - Pages, word (Number of whole/partial pages.)
+			int iPages = ReadUInt16(stream);
+			// 0x06 - Relocation items, word (Number of entries in the relocation table.)
+			int iRelocationItems = ReadUInt16(stream);
+			// 0x08 - Header size, word (The number of paragraphs taken up by the header. It can be any value, as the loader just uses it to find where the actual executable data starts. It may be larger than what the "standard" fields take up, and you may use it if you want to include your own header metadata, or put the relocation table there, or use it for any other purpose.)
+			int iHeaderSize = ReadUInt16(stream);
 			exe.iMinimumAllocation = ReadUInt16(stream);
 			exe.iMaximumAllocation = ReadUInt16(stream);
 			exe.iInitialSS = ReadUInt16(stream);
 			exe.iInitialSP = ReadUInt16(stream);
-			exe.iChecksum = ReadUInt16(stream);
+			// 0x12 - Checksum, word (When added to the sum of all other words in the file, the result should be zero.)
+			int iChecksum = ReadUInt16(stream);
 			exe.iInitialIP = ReadUInt16(stream);
 			exe.iInitialCS = ReadUInt16(stream);
-			exe.iRelocationTableOffset = ReadUInt16(stream);
-			exe.iOverlay = ReadUInt16(stream);
-			int iHeaderDataSize = (exe.iHeaderSize << 4) - 0x1c;
-			exe.aHeaderData = new byte[iHeaderDataSize];
-			stream.Read(exe.aHeaderData, 0, iHeaderDataSize);
+			// 0x18 - Relocation table, word (The (absolute) offset to the relocation table.)
+			int iRelocationTableOffset = ReadUInt16(stream);
+			exe.iOverlayIndex = ReadUInt16(stream);
 
-			if (exe.iRelocationItems > 0)
+			// read relocations
+			if (iRelocationItems > 0)
 			{
-				stream.Seek(exe.iRelocationTableOffset, SeekOrigin.Begin);
-				exe.aRelocations = new MZRelocationItem[exe.iRelocationItems];
-				for (int i = 0; i < exe.iRelocationItems; i++)
+				stream.Seek(position + iRelocationTableOffset, SeekOrigin.Begin);
+				for (int i = 0; i < iRelocationItems; i++)
 				{
-					exe.aRelocations[i] = new MZRelocationItem(ReadUInt16(stream), ReadUInt16(stream));
+					exe.aRelocations.Add(new MZRelocationItem(ReadUInt16(stream), ReadUInt16(stream)));
 				}
 
-				stream.Seek(exe.iHeaderSize << 4, SeekOrigin.Begin);
+				stream.Seek(position + iHeaderSize << 4, SeekOrigin.Begin);
 			}
 
-			int iDataSize = (exe.iPages << 9) - (exe.iHeaderSize << 4);
-			exe.aData = new byte[iDataSize];
-			stream.Read(exe.aData, 0, iDataSize);
+			// read data
+			int iDataSize = (iExtraBytes > 0) ? (((iPages - 1) << 9) + iExtraBytes) - (iHeaderSize << 4) : (iPages << 9) - (iHeaderSize << 4);
+			stream.Seek(position + (iHeaderSize << 4), SeekOrigin.Begin);
+			byte[] buffer = new byte[iDataSize];
+			stream.Read(buffer, 0, iDataSize);
+			exe.aData = new List<byte>(buffer);
+
+			return (iPages << 9);
 		}
 
+		#region Helper functions
 		public static byte ReadByte(Stream stream)
 		{
 			int b0 = stream.ReadByte();
@@ -207,6 +199,70 @@ namespace Disassembler.MZ
 			}
 
 			return Encoding.ASCII.GetString(abTemp);
+		}
+		#endregion
+
+
+		public int Signature
+		{
+			get { return this.iSignature; }
+		}
+
+		public int MinimumAllocation
+		{
+			get { return this.iMinimumAllocation; }
+			set { this.iMinimumAllocation = value; }
+		}
+
+		public int MaximumAllocation
+		{
+			get { return this.iMaximumAllocation; }
+			set { this.iMaximumAllocation = value; }
+		}
+
+		public int InitialSS
+		{
+			get { return this.iInitialSS; }
+			set { this.iInitialSS = value; }
+		}
+
+		public int InitialSP
+		{
+			get { return this.iInitialSP; }
+			set { this.iInitialSP = value; }
+		}
+
+		public int InitialIP
+		{
+			get { return this.iInitialIP; }
+			set { this.iInitialIP = value; }
+		}
+
+		public int InitialCS
+		{
+			get { return this.iInitialCS; }
+			set { this.InitialCS = value; }
+		}
+
+		public int OverlayIndex
+		{
+			get { return this.iOverlayIndex; }
+			set { this.iOverlayIndex = value; }
+		}
+
+		public List<byte> Data
+		{
+			get { return this.aData; }
+		}
+
+		public List<MZRelocationItem> Relocations
+		{
+			get { return this.aRelocations; }
+		}
+
+		public List<MZExecutable> Overlays
+		{
+			get { return this.aOverlays; }
 		}
 	}
 }

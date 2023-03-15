@@ -1,4 +1,5 @@
 ﻿using Disassembler;
+using Disassembler.CPU;
 using Disassembler.Decompiler;
 using Disassembler.MZ;
 using Disassembler.NE;
@@ -21,6 +22,22 @@ internal class Program
 		//MakeTable();
 
 		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\civ.exe");
+
+		// decode EXE packer
+		int iAX = 0;
+		int iDS = mzEXE.InitialCS;
+/*mov word_3A0D_4, ax
+add ax, word_3A0D_C
+mov es, ax
+mov cx, word_3A0D_6
+mov di, cx
+dec di
+mov si, di
+std
+rep movsb
+push ax
+push 32h
+retf*/
 
 		// load libraries and modules
 		CModule oModule = new CModule(@"..\..\..\..\Borland\Installed1\BORLANDC\LIB\C0WL.obj");
