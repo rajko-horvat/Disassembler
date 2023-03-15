@@ -1,5 +1,6 @@
 ﻿using Disassembler;
 using Disassembler.Decompiler;
+using Disassembler.MZ;
 using Disassembler.NE;
 using Disassembler.OMF;
 using IRB.Collections.Generic;
@@ -18,6 +19,8 @@ internal class Program
 			Directory.CreateDirectory(path + "Data");
 
 		//MakeTable();
+
+		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\civ.exe");
 
 		// load libraries and modules
 		CModule oModule = new CModule(@"..\..\..\..\Borland\Installed1\BORLANDC\LIB\C0WL.obj");
