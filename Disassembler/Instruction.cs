@@ -342,7 +342,11 @@ namespace Disassembler
 			uint rm = (uint)(value & 0x7);
 
 			if (addressSize != InstructionSizeEnum.Word)
-				throw new Exception("x32 addressing mode not yet implemented");
+			{
+				Console.WriteLine("x32 addressing mode not yet implemented");
+				//throw new Exception("x32 addressing mode not yet implemented");
+				return new InstructionParameter(InstructionParameterTypeEnum.Undefined, 0);
+			}
 
 			switch (mod)
 			{
@@ -544,7 +548,19 @@ namespace Disassembler
 			{
 				sbValue.Append("LOCK ");
 			}
-			
+
+			switch (this.eRepPrefix)
+			{
+				case InstructionPrefixEnum.REPE:
+					sbValue.Append("REPE ");
+					break;
+				case InstructionPrefixEnum.REPNE:
+					sbValue.Append("REPNE ");
+					break;
+				default:
+					break;
+			}
+
 			InstructionParameter oAcc = new InstructionParameter(InstructionParameterTypeEnum.Register, this.eOperandSize, 0);
 
 			switch (this.eInstruction)

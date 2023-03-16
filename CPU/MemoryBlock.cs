@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Disassembler.CPU
 {
@@ -38,17 +39,22 @@ namespace Disassembler.CPU
 			}
 		}
 
-		public bool IsProtected(ushort segment, ushort offset)
+		public bool IsProtected(ushort segment, ushort offset, MemoryFlagsEnum access)
 		{
-			return this.IsProtected(MemoryRegion.ToAbsolute(segment, offset));
+			return this.IsProtected(MemoryRegion.ToAbsolute(segment, offset), access);
 		}
 
-		public bool IsProtected(int address)
+		public bool IsProtected(int address, MemoryFlagsEnum access)
 		{
 			for (int i = 0; i < this.aProtected.Count; i++)
 			{
 				if (this.aProtected[i].CheckBounds(address))
-					return true;
+				{
+					if ((this.aProtected[i].AccessFlags & access) != access)
+						return true;
+					else
+						return false;
+				}
 			}
 
 			return false;
@@ -65,7 +71,7 @@ namespace Disassembler.CPU
 			{
 				throw new Exception("Memory block address outside bounds");
 			}
-			if (this.IsProtected(address))
+			if (this.IsProtected(address, MemoryFlagsEnum.Read))
 			{
 				Console.WriteLine("Attempt to read from protected area at 0x{0:x8}", address);
 				return 0;
@@ -85,7 +91,7 @@ namespace Disassembler.CPU
 			{
 				throw new Exception("Memory block address outside bounds");
 			}
-			if (this.IsProtected(address))
+			if (this.IsProtected(address, MemoryFlagsEnum.Read))
 			{
 				Console.WriteLine("Attempt to read from protected area at 0x{0:x8}", address);
 				return 0;
@@ -106,9 +112,9 @@ namespace Disassembler.CPU
 			{
 				throw new Exception("Memory block address outside bounds");
 			}
-			if (this.IsProtected(address))
+			if (this.IsProtected(address, MemoryFlagsEnum.Write))
 			{
-				Console.WriteLine("Attempt to write from protected area at 0x{0:x8}", address);
+				Console.WriteLine("Attempt to write to protected area at 0x{0:x8}", address);
 				return;
 			}
 
@@ -126,9 +132,9 @@ namespace Disassembler.CPU
 			{
 				throw new Exception("Memory block address outside bounds");
 			}
-			if (this.IsProtected(address))
+			if (this.IsProtected(address, MemoryFlagsEnum.Write))
 			{
-				Console.WriteLine("Attempt to write from protected area at 0x{0:x8}", address);
+				Console.WriteLine("Attempt to write to protected area at 0x{0:x8}", address);
 				return;
 			}
 			int iLocation = this.oRegion.MapAddress(address);
@@ -137,29 +143,29 @@ namespace Disassembler.CPU
 			this.abData[iLocation + 1] = (byte)((value & 0xff00) >> 8);
 		}
 
-		public void CopyData(ushort segment, ushort offset, byte[] data, int pos, int length)
+		public void CopyData(ushort segment, ushort offset, byte[] srcData, int pos, int length)
 		{
-			this.CopyData(MemoryRegion.ToAbsolute(segment, offset), data, pos, length, true);
+			this.CopyData(MemoryRegion.ToAbsolute(segment, offset), srcData, pos, length, true);
 		}
 
-		public void CopyData(ushort segment, ushort offset, byte[] data, int pos, int length, bool check)
+		public void CopyData(ushort segment, ushort offset, byte[] srcData, int pos, int length, bool check)
 		{
-			this.CopyData(MemoryRegion.ToAbsolute(segment, offset), data, pos, length, check);
+			this.CopyData(MemoryRegion.ToAbsolute(segment, offset), srcData, pos, length, check);
 		}
 
-		public void CopyData(int address, byte[] data, int pos, int length)
+		public void CopyData(int address, byte[] srcData, int pos, int length)
 		{
-			this.CopyData(address, data, pos, length, true);
+			this.CopyData(address, srcData, pos, length, true);
 		}
 
-		public void CopyData(int address, byte[] data, int pos, int length, bool check)
+		public void CopyData(int address, byte[] srcData, int pos, int length, bool check)
 		{
-			if (check && this.IsProtected(address))
+			if (check && this.IsProtected(address, MemoryFlagsEnum.Write))
 			{
 				throw new Exception(string.Format("Attempt to write to protected area at 0x{0:x8}", address));
 			}
 
-			Array.Copy(data, pos, this.abData, this.oRegion.MapAddress(address), length);
+			Array.Copy(srcData, pos, this.abData, this.oRegion.MapAddress(address), length);
 		}
 
 		public void Resize(int size)

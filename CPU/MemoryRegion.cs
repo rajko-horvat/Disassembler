@@ -6,20 +6,46 @@ using System.Threading.Tasks;
 
 namespace Disassembler.CPU
 {
-	public struct MemoryRegion
+	[Flags]
+	public enum MemoryFlagsEnum
+	{
+		None = 0,
+		Write = 1,
+		Read = 2
+	}
+
+	public class MemoryRegion
 	{
 		private int iStart;
 		private int iSize;
+		private MemoryFlagsEnum eAccessFlags;
 
 		public MemoryRegion(ushort segment, ushort offset, int size)
-			: this(MemoryRegion.ToAbsolute(segment, offset), size)
+			: this(MemoryRegion.ToAbsolute(segment, offset), size, MemoryFlagsEnum.None)
+		{
+		}
+
+		public MemoryRegion(ushort segment, ushort offset, int size, MemoryFlagsEnum access)
+			: this(MemoryRegion.ToAbsolute(segment, offset), size, access)
 		{
 		}
 
 		public MemoryRegion(int start, int size)
+			: this(start, size, MemoryFlagsEnum.None)
+		{
+		}
+
+		public MemoryRegion(int start, int size, MemoryFlagsEnum access)
 		{
 			this.iStart = start;
 			this.iSize = size;
+			this.eAccessFlags = access;
+		}
+
+		public MemoryFlagsEnum AccessFlags
+		{
+			get { return eAccessFlags; }
+			set { eAccessFlags = value; }
 		}
 
 		public int Start

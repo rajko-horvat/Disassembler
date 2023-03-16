@@ -21,43 +21,7 @@ internal class Program
 
 		//MakeTable();
 
-		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\civ.exe");
-
-		Memory oMemory = new Memory();
-		ushort usSegment;
-		oMemory.AllocateParagraphs(0x10, out usSegment);
-		oMemory.AllocateBlock(mzEXE.Data.Length, out usSegment);
-		oMemory.WriteBlock(usSegment, 0, mzEXE.Data, 0, mzEXE.Data.Length);
-		oMemory.AllocateParagraphs((ushort)mzEXE.MinimumAllocation, out usSegment);
-
-		// decode EXE packer
-		CPURegister rES = new CPURegister(0);
-		CPURegister rDS = new CPURegister(0);
-		CPURegister rCS = new CPURegister((uint)mzEXE.InitialCS + 0x10);
-		CPURegister rAX = new CPURegister(0);
-		CPURegister rCX = new CPURegister();
-		CPURegister rDI = new CPURegister();
-		CPURegister rSI = new CPURegister();
-
-		rAX.Word = rES.Word;
-		rAX.Word += 0x10;
-		rDS.Word = rCS.Word;
-		oMemory.WriteWord(rDS.Word, 0x4, rAX.Word);
-		rAX.Word += oMemory.ReadWord(rDS.Word, 0xc);
-		rES.Word = rAX.Word;
-		rCX.Word = oMemory.ReadWord(rDS.Word, 0x6);
-		rDI.Word = rCX.Word;
-		rDI.Word--;
-		rSI.Word = rDI.Word;
-		while (rCX.Word != 0)
-		{
-			oMemory.WriteByte(rES.Word, rDI.Word, oMemory.ReadByte(rDS.Word, rSI.Word));
-			rDI.Word--;
-			rSI.Word--;
-			rCX.Word--;
-		}
-		
-		// CS:IP = AX:0x32
+		ParseDOSEXE(path);
 
 		// load libraries and modules
 		CModule oModule = new CModule(@"..\..\..\..\Borland\Installed1\BORLANDC\LIB\C0WL.obj");
@@ -1098,6 +1062,86 @@ internal class Program
 		{
 			Console.WriteLine("Can't find WinMain function!");
 		}
+	}
+
+	private static void ParseDOSEXE(string path)
+	{
+		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\civ.exe");
+
+		Memory oMemory = new Memory();
+		ushort usPSPSegment;
+		ushort usMZSegment;
+		ushort usDataSegment;
+		oMemory.AllocateParagraphs(0x10, out usPSPSegment);
+		oMemory.AllocateBlock(mzEXE.Data.Length, out usMZSegment);
+		oMemory.WriteBlock(usMZSegment, 0, mzEXE.Data, 0, mzEXE.Data.Length);
+		oMemory.AllocateParagraphs((ushort)mzEXE.MinimumAllocation, out usDataSegment);
+		oMemory.Blocks[0].Protected.Add(new MemoryRegion(0, 0x100, MemoryFlagsEnum.Read));
+		//oMemory.Blocks[1].Protected.Add(new MemoryRegion(usMZSegment, 0, mzEXE.Data.Length, MemoryFlagsEnum.Read));
+
+		// decode EXE packer
+		CPURegister rES = new CPURegister(0);
+		CPURegister rDS = new CPURegister(0);
+		CPURegister rCS = new CPURegister((uint)mzEXE.InitialCS + 0x10);
+		CPURegister rAX = new CPURegister(0);
+		CPURegister rCX = new CPURegister();
+		CPURegister rDI = new CPURegister();
+		CPURegister rSI = new CPURegister();
+
+		rAX.Word = rES.Word;
+		rAX.Word += 0x10;
+		rDS.Word = rCS.Word;
+		oMemory.WriteWord(rDS.Word, 0x4, rAX.Word);
+		rAX.Word += oMemory.ReadWord(rDS.Word, 0xc);
+		rES.Word = rAX.Word;
+		rCX.Word = oMemory.ReadWord(rDS.Word, 0x6);
+		int iBlockSize = rCX.Word;
+		rDI.Word = rCX.Word;
+		rDI.Word--;
+		rSI.Word = rDI.Word;
+		// std
+		while (rCX.Word != 0)
+		{
+			oMemory.WriteByte(rES.Word, rDI.Word, oMemory.ReadByte(rDS.Word, rSI.Word));
+			rDI.Word--;
+			rSI.Word--;
+			rCX.Word--;
+		}
+
+		oMemory.Blocks[2].Protected.Add(new MemoryRegion(rAX.Word, 0, iBlockSize, MemoryFlagsEnum.Read));
+
+		// CS:IP = AX:0x32
+
+
+
+		byte[] buffer = new byte[iBlockSize];
+		for (int i = 0; i < iBlockSize; i++)
+		{
+			buffer[i] = oMemory.ReadByte(rAX.Word, (ushort)i);
+		}
+		MemoryStream reader = new MemoryStream(buffer);
+
+		List<Instruction> aInstructions = new List<Instruction>();
+		ushort usPosition = 0;
+
+		while (usPosition < buffer.Length)
+		{
+			Instruction instruction = new Instruction(rAX.Word, usPosition, reader);
+			aInstructions.Add(instruction);
+			usPosition += (ushort)instruction.Bytes.Count;
+		}
+		reader.Dispose();
+
+		StreamWriter writer = new StreamWriter($"{path}{Path.DirectorySeparatorChar}chunk.asm");
+		for (int i = 0; i < aInstructions.Count; i++)
+		{
+			Instruction instruction = aInstructions[i];
+			writer.WriteLine($"0x{instruction.Location.Offset:x4}\t{instruction.ToString()}");
+		}
+		writer.Close();
+		writer.Dispose();
+
+		Console.WriteLine("Finished DOS processing");
 	}
 
 	private static string AppendReturn(NewExecutable exe, CFunction function, string call)
