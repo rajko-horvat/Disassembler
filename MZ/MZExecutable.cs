@@ -1,4 +1,5 @@
-﻿using Disassembler.NE;
+﻿using Disassembler.CPU;
+using Disassembler.NE;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -10,25 +11,23 @@ namespace Disassembler.MZ
 {
 	public struct MZRelocationItem
 	{
-		// 0x00 - Offset, word (Offset of the relocation within provided segment.)
-		private int iOffset;
-		// 0x02 - Segment, word (Segment of the relocation, relative to the load segment address.)
 		private int iSegment;
+		private int iOffset;
 
-		public MZRelocationItem(int offset, int segment)
+		public MZRelocationItem(int segment, int offset)
 		{
-			this.iOffset = offset;
 			this.iSegment = segment;
-		}
-
-		public int Offset
-		{
-			get { return iOffset; }
+			this.iOffset = offset;
 		}
 
 		public int Segment
 		{
 			get { return iSegment; }
+		}
+
+		public int Offset
+		{
+			get { return iOffset; }
 		}
 	}
 
@@ -50,6 +49,9 @@ namespace Disassembler.MZ
 		protected int iInitialCS = -1;
 		// 0x1A - Overlay, word (Value used for overlay management. If zero, this is the main executable.)
 		protected int iOverlayIndex = -1;
+		// 0x1C - Overlay information, word (Files sometimes contain extra information for the main's program overlay management.)
+		// always 1 in thiscase
+		protected int iOverlayID = -1;
 		// actual code or data
 		protected byte[] aData = new byte[0];
 		// relocation data
@@ -108,6 +110,7 @@ namespace Disassembler.MZ
 			// 0x18 - Relocation table, word (The (absolute) offset to the relocation table.)
 			int iRelocationTableOffset = ReadUInt16(stream);
 			exe.iOverlayIndex = ReadUInt16(stream);
+			exe.iOverlayID = ReadUInt16(stream);
 
 			// read relocations
 			if (iRelocationItems > 0)
@@ -115,7 +118,9 @@ namespace Disassembler.MZ
 				stream.Seek(position + iRelocationTableOffset, SeekOrigin.Begin);
 				for (int i = 0; i < iRelocationItems; i++)
 				{
-					exe.aRelocations.Add(new MZRelocationItem(ReadUInt16(stream), ReadUInt16(stream)));
+					int iOffset = ReadUInt16(stream);
+					int iSegment = ReadUInt16(stream);
+					exe.aRelocations.Add(new MZRelocationItem(iSegment, iOffset));
 				}
 
 				stream.Seek(position + iHeaderSize << 4, SeekOrigin.Begin);
@@ -129,6 +134,96 @@ namespace Disassembler.MZ
 			exe.aData = buffer;
 
 			return (iPages << 9);
+		}
+
+		public void WriteToFile(string path)
+		{
+			FileStream writer = new FileStream(path, FileMode.Create);
+			this.WriteToFile(writer);
+			writer.Close();
+		}
+
+		public void WriteToFile(Stream stream)
+		{
+			MemoryStream writer = new MemoryStream();
+			WriteUInt16(writer, this.iSignature);
+			int iLength = this.aData.Length;
+			int iHeaderSize = 0x1e + this.aRelocations.Count * 4;
+			MemoryRegion.AlignBlock(ref iHeaderSize);
+			iLength += iHeaderSize;
+			int iPages = iLength / 512;
+			int iExtraBytes = iLength - (iPages * 512);
+			if (iExtraBytes > 0)
+				iPages++;
+			WriteUInt16(writer, iExtraBytes);
+			WriteUInt16(writer, iPages);
+			WriteUInt16(writer, this.aRelocations.Count);
+			iHeaderSize >>= 4;
+			WriteUInt16(writer, iHeaderSize);
+			WriteUInt16(writer, this.iMinimumAllocation);
+			WriteUInt16(writer, this.iMaximumAllocation);
+			WriteUInt16(writer, this.iInitialSS);
+			WriteUInt16(writer, this.iInitialSP);
+			int iChecksum = 0;
+			WriteUInt16(writer, iChecksum);
+			WriteUInt16(writer, this.iInitialIP);
+			WriteUInt16(writer, this.iInitialCS);
+			WriteUInt16(writer, 0x1e);
+			WriteUInt16(writer, this.iOverlayIndex);
+			WriteUInt16(writer, this.iOverlayID);
+
+			// write relocations
+			for (int i = 0; i < this.aRelocations.Count; i++)
+			{
+				MZRelocationItem relocation = this.aRelocations[i];
+				WriteUInt16(writer, relocation.Offset);
+				WriteUInt16(writer, relocation.Segment);
+			}
+
+			// append to 16 byte boundary
+			int iAppend = (int)((iHeaderSize << 4) - (0x1e + this.aRelocations.Count * 4));
+			for (int i = 0; i < iAppend; i++)
+			{
+				writer.WriteByte(0);
+			}
+
+			// write data
+			writer.Write(this.aData, 0, this.aData.Length);
+
+			// append to full 512 byte page
+			iAppend = 512 - iExtraBytes;
+			for (int i = 0; i < iAppend; i++)
+			{
+				writer.WriteByte(0);
+			}
+			writer.Flush();
+
+			// calculate checksum
+			byte[] buffer = writer.ToArray();
+			writer.Seek(0, SeekOrigin.Begin);
+			for (int i = 0; i < buffer.Length; i += 2)
+			{
+				iChecksum += ReadUInt16(writer);
+			}
+			iChecksum &= 0xffff;
+			iChecksum = 0x10000 - iChecksum;
+			writer.Seek(0x12, SeekOrigin.Begin);
+			WriteUInt16(writer, iChecksum);
+
+			writer.Seek(buffer.Length, SeekOrigin.Begin);
+
+			// write overlays
+			for (int i = 0; i < this.aOverlays.Count; i++)
+			{
+				this.aOverlays[i].WriteToFile(writer);
+			}
+
+			writer.Flush();
+
+			buffer = writer.ToArray();
+			stream.Write(buffer, 0, buffer.Length);
+
+			writer.Dispose();
 		}
 
 		#region Helper functions
@@ -200,8 +295,13 @@ namespace Disassembler.MZ
 
 			return Encoding.ASCII.GetString(abTemp);
 		}
-		#endregion
 
+		public void WriteUInt16(Stream stream, int value)
+		{
+			stream.WriteByte((byte)(value & 0xff));
+			stream.WriteByte((byte)((value & 0xff00) >> 8));
+		}
+		#endregion
 
 		public int Signature
 		{
@@ -241,13 +341,19 @@ namespace Disassembler.MZ
 		public int InitialCS
 		{
 			get { return this.iInitialCS; }
-			set { this.InitialCS = value; }
+			set { this.iInitialCS = value; }
 		}
 
 		public int OverlayIndex
 		{
 			get { return this.iOverlayIndex; }
 			set { this.iOverlayIndex = value; }
+		}
+
+		public int OverlayID
+		{
+			get { return this.iOverlayID; }
+			set { this.iOverlayID = value; }
 		}
 
 		public byte[] Data

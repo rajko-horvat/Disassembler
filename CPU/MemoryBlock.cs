@@ -10,7 +10,6 @@ namespace Disassembler.CPU
 	public class MemoryBlock
 	{
 		private MemoryRegion oRegion;
-		private List<MemoryRegion> aProtected = new List<MemoryRegion>();
 		private byte[] abData;
 
 		public MemoryBlock(ushort segment, ushort offset, int size)
@@ -31,33 +30,9 @@ namespace Disassembler.CPU
 			}
 		}
 
-		public List<MemoryRegion> Protected
+		public byte[] Data
 		{
-			get
-			{
-				return this.aProtected;
-			}
-		}
-
-		public bool IsProtected(ushort segment, ushort offset, MemoryFlagsEnum access)
-		{
-			return this.IsProtected(MemoryRegion.ToAbsolute(segment, offset), access);
-		}
-
-		public bool IsProtected(int address, MemoryFlagsEnum access)
-		{
-			for (int i = 0; i < this.aProtected.Count; i++)
-			{
-				if (this.aProtected[i].CheckBounds(address))
-				{
-					if ((this.aProtected[i].AccessFlags & access) != access)
-						return true;
-					else
-						return false;
-				}
-			}
-
-			return false;
+			get { return this.abData; }
 		}
 
 		public byte ReadByte(ushort segment, ushort offset)
@@ -70,11 +45,6 @@ namespace Disassembler.CPU
 			if (!this.oRegion.CheckBounds(address))
 			{
 				throw new Exception("Memory block address outside bounds");
-			}
-			if (this.IsProtected(address, MemoryFlagsEnum.Read))
-			{
-				Console.WriteLine("Attempt to read from protected area at 0x{0:x8}", address);
-				return 0;
 			}
 
 			return this.abData[this.oRegion.MapAddress(address)];
@@ -90,11 +60,6 @@ namespace Disassembler.CPU
 			if (!this.oRegion.CheckBounds(address))
 			{
 				throw new Exception("Memory block address outside bounds");
-			}
-			if (this.IsProtected(address, MemoryFlagsEnum.Read))
-			{
-				Console.WriteLine("Attempt to read from protected area at 0x{0:x8}", address);
-				return 0;
 			}
 			int iLocation = this.oRegion.MapAddress(address);
 
@@ -112,11 +77,6 @@ namespace Disassembler.CPU
 			{
 				throw new Exception("Memory block address outside bounds");
 			}
-			if (this.IsProtected(address, MemoryFlagsEnum.Write))
-			{
-				Console.WriteLine("Attempt to write to protected area at 0x{0:x8}", address);
-				return;
-			}
 
 			this.abData[this.oRegion.MapAddress(address)] = value;
 		}
@@ -132,40 +92,10 @@ namespace Disassembler.CPU
 			{
 				throw new Exception("Memory block address outside bounds");
 			}
-			if (this.IsProtected(address, MemoryFlagsEnum.Write))
-			{
-				Console.WriteLine("Attempt to write to protected area at 0x{0:x8}", address);
-				return;
-			}
 			int iLocation = this.oRegion.MapAddress(address);
 
 			this.abData[iLocation] = (byte)(value & 0xff);
 			this.abData[iLocation + 1] = (byte)((value & 0xff00) >> 8);
-		}
-
-		public void CopyData(ushort segment, ushort offset, byte[] srcData, int pos, int length)
-		{
-			this.CopyData(MemoryRegion.ToAbsolute(segment, offset), srcData, pos, length, true);
-		}
-
-		public void CopyData(ushort segment, ushort offset, byte[] srcData, int pos, int length, bool check)
-		{
-			this.CopyData(MemoryRegion.ToAbsolute(segment, offset), srcData, pos, length, check);
-		}
-
-		public void CopyData(int address, byte[] srcData, int pos, int length)
-		{
-			this.CopyData(address, srcData, pos, length, true);
-		}
-
-		public void CopyData(int address, byte[] srcData, int pos, int length, bool check)
-		{
-			if (check && this.IsProtected(address, MemoryFlagsEnum.Write))
-			{
-				throw new Exception(string.Format("Attempt to write to protected area at 0x{0:x8}", address));
-			}
-
-			Array.Copy(srcData, pos, this.abData, this.oRegion.MapAddress(address), length);
 		}
 
 		public void Resize(int size)

@@ -124,7 +124,8 @@ namespace Disassembler.CPU
 
 		public static int ToAbsolute(ushort segment, ushort offset)
 		{
-			return (int)((int)segment << 4) + (int)offset;
+			// 1MB limit!
+			return ((int)((int)segment << 4) + (int)offset) & 0xfffff;
 		}
 
 		public static void AlignBlock(ref int address)

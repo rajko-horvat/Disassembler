@@ -10,6 +10,7 @@ namespace Disassembler.CPU
 	public class Memory
 	{
 		private List<MemoryBlock> aBlocks = new List<MemoryBlock>();
+		private List<MemoryRegion> aMemoryRegions = new List<MemoryRegion>();
 
 		public Memory()
 		{
@@ -20,6 +21,35 @@ namespace Disassembler.CPU
 			get { return aBlocks; } 
 		}
 
+		public List<MemoryRegion> MemoryRegions
+		{
+			get
+			{
+				return this.aMemoryRegions;
+			}
+		}
+
+		public bool HasAccess(ushort segment, ushort offset, MemoryFlagsEnum access)
+		{
+			return this.HasAccess(MemoryRegion.ToAbsolute(segment, offset), access);
+		}
+
+		public bool HasAccess(int address, MemoryFlagsEnum access)
+		{
+			for (int i = 0; i < this.aMemoryRegions.Count; i++)
+			{
+				if (this.aMemoryRegions[i].CheckBounds(address))
+				{
+					if ((this.aMemoryRegions[i].AccessFlags & access) != access)
+						return true;
+					else
+						return false;
+				}
+			}
+
+			return false;
+		}
+
 		public byte ReadByte(ushort segment, ushort offset)
 		{
 			return this.ReadByte(MemoryRegion.ToAbsolute(segment, offset));
@@ -27,6 +57,12 @@ namespace Disassembler.CPU
 
 		public byte ReadByte(int address)
 		{
+			if (this.HasAccess(address, MemoryFlagsEnum.Read))
+			{
+				Console.WriteLine("Attempt to read from protected area at 0x{0:x8}", address);
+				return 0;
+			}
+
 			for (int i = 0; i < this.aBlocks.Count; i++)
 			{
 				if (this.aBlocks[i].Region.CheckBounds(address))
@@ -46,6 +82,12 @@ namespace Disassembler.CPU
 
 		public ushort ReadWord(int address)
 		{
+			if (this.HasAccess(address, MemoryFlagsEnum.Read))
+			{
+				Console.WriteLine("Attempt to read from protected area at 0x{0:x8}", address);
+				return 0;
+			}
+
 			for (int i = 0; i < this.aBlocks.Count; i++)
 			{
 				if (this.aBlocks[i].Region.CheckBounds(address, 2))
@@ -65,15 +107,17 @@ namespace Disassembler.CPU
 
 		public void WriteByte(int address, byte value)
 		{
+			if (this.HasAccess(address, MemoryFlagsEnum.Write))
+			{
+				Console.WriteLine("Attempt to write to protected area at 0x{0:x8}", address);
+				return;
+			}
+
 			bool bFound = false;
 			for (int i = 0; i < this.aBlocks.Count; i++)
 			{
 				if (this.aBlocks[i].Region.CheckBounds(address))
 				{
-					if (i == 0 && address < 0x12a70)
-					{
-						Console.WriteLine("Write byte at code block 0x{0:x4} = 0x{1:x2}", this.aBlocks[i].Region.MapAddress(address), value);
-					}
 					this.aBlocks[i].WriteByte(address, value);
 					bFound = true;
 					break;
@@ -91,14 +135,15 @@ namespace Disassembler.CPU
 
 		public void WriteWord(int address, ushort value)
 		{
+			if (this.HasAccess(address, MemoryFlagsEnum.Write))
+			{
+				Console.WriteLine("Attempt to write to protected area at 0x{0:x8}", address);
+				return;
+			}
+
 			bool bFound = false;
 			for (int i = 0; i < this.aBlocks.Count; i++)
 			{
-				if (i == 0 && address < 0x12a70)
-				{
-					Console.WriteLine("Write word at code block 0x{0:x4} = 0x{1:x4}", this.aBlocks[i].Region.MapAddress(address), value);
-				}
-
 				if (this.aBlocks[i].Region.CheckBounds(address, 2))
 				{
 					this.aBlocks[i].WriteWord(address, value);
@@ -111,16 +156,16 @@ namespace Disassembler.CPU
 				Console.WriteLine("Attempt to write word 0x{0:x4} at 0x{1:x8}", value, address);
 		}
 
-		public void WriteBlock(ushort segment, ushort offset, byte[] data, int pos, int length)
+		public void WriteBlock(ushort segment, ushort offset, byte[] srcData, int pos, int length)
 		{
-			WriteBlock(MemoryRegion.ToAbsolute(segment, offset), data, pos, length);
+			WriteBlock(MemoryRegion.ToAbsolute(segment, offset), srcData, pos, length);
 		}
 
-		public void WriteBlock(int address, byte[] data, int pos, int length) 
+		public void WriteBlock(int address, byte[] srcData, int pos, int length) 
 		{
 			for (int i = 0; i < length; i++)
 			{
-				WriteByte(address + i, data[pos + i]);
+				WriteByte(address + i, srcData[pos + i]);
 			}
 		}
 
@@ -222,9 +267,6 @@ namespace Disassembler.CPU
 			{
 				if (this.aBlocks[i].Region.Start == iAddress)
 				{
-					if (this.aBlocks[i].Protected.Count > 0)
-						throw new Exception("Attempt to free the protected memory region");
-
 					// found the block
 					this.aBlocks.RemoveAt(i);
 					return true;

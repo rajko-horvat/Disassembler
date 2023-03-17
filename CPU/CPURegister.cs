@@ -64,5 +64,10 @@ namespace Disassembler.CPU
 				this.uiValue = value;
 			}
 		}
+
+		public override string ToString()
+		{
+			return $"0x{this.uiValue:x8}";
+		}
 	}
 }
