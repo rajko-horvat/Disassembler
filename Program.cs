@@ -1111,14 +1111,14 @@ internal class Program
 		buffer1 = oMemory1.Blocks[2].Data;
 		buffer2 = oMemory2.Blocks[2].Data;
 
-		Console.WriteLine("Writing blocks to files");
+		/*Console.WriteLine("Writing blocks to files");
 		FileStream writer = new FileStream("exe1.bin", FileMode.Create);
 		writer.Write(buffer1, 0, buffer1.Length);
 		writer.Close();
 
 		writer = new FileStream("exe2.bin", FileMode.Create);
 		writer.Write(buffer2, 0, buffer2.Length);
-		writer.Close();
+		writer.Close();*/
 
 		// decrease minimum allocation by additional size that was added to EXE
 		mzEXE.MinimumAllocation -= iLastEmptyByte >> 4;
@@ -1127,13 +1127,13 @@ internal class Program
 		mzEXE.InitialSS = oRegisters1.SS.Word - usSegment1;
 		mzEXE.InitialSP = oRegisters1.SP.Word;
 		mzEXE.InitialIP = oRegisters1.IP.Word;
-		mzEXE.InitialCS = oRegisters1.CS.Word - usSegment1 - 0x10; // account for PSP (0x10)
+		mzEXE.InitialCS = oRegisters1.CS.Word - usSegment1; // - 0x10; // account for PSP (0x10)
 
 		Console.WriteLine("Block validation passed");
 
 		// write new EXE
 
-		mzEXE.WriteToFile("civ1.exe");
+		mzEXE.WriteToFile("civ.exe");
 
 		/*byte[] buffer = new byte[iBlockSize];
 		for (int i = 0; i < iBlockSize; i++)
@@ -1189,10 +1189,10 @@ internal class Program
 					// compare absolute offsets, not relative ones
 					ushort usWord1 = (ushort)((ushort)block1[i] | (ushort)((ushort)block1[i + 1] << 8));
 					usWord1 -= segment1;
-					usWord1 -= 0x10; // account for PSP (0x10)
+					//usWord1 -= 0x10; // account for PSP (0x10)
 					ushort usWord2 = (ushort)((ushort)block2[i] | (ushort)((ushort)block2[i + 1] << 8));
 					usWord2 -= segment2;
-					usWord2 -= 0x10; // account for PSP (0x10)
+					//usWord2 -= 0x10; // account for PSP (0x10)
 
 					if (usWord1 != usWord2)
 					{
@@ -1233,9 +1233,12 @@ internal class Program
 		int uiMZEXELength = exe.Data.Length;
 		MemoryRegion.AlignBlock(ref uiMZEXELength);
 
+		if (startSegment < 0x10)
+			throw new Exception("starting segment must be greater than 0x10");
+
 		// blank start segment
-		oMemory.AllocateParagraphs(startSegment, out usPSPSegment);
-		oMemory.MemoryRegions.Add(new MemoryRegion(0, startSegment << 4, MemoryFlagsEnum.None));
+		oMemory.AllocateParagraphs((ushort)(startSegment - 0x10), out usPSPSegment);
+		oMemory.MemoryRegions.Add(new MemoryRegion(0, (startSegment - 0x10) << 4, MemoryFlagsEnum.None));
 
 		// PSP segment
 		oMemory.AllocateParagraphs(0x10, out usPSPSegment);
@@ -1357,7 +1360,8 @@ internal class Program
 		r.ES.Word = r.AX.Word;
 		// 0x004d	MOV DI, 0xf
 		r.DI.Word = 0xf;
-	l50:
+
+		l50:
 		// 0x0050	MOV CL, 0x4
 		r.CX.Low = 0x4;
 		// 0x0052	MOV AX, SI
@@ -1376,7 +1380,8 @@ internal class Program
 		r.DS.Word = r.DX.Word;
 		// 0x0060	OR SI, 0xfff0
 		r.SI.Word |= 0xfff0;
-	l63:
+
+		l63:
 		// 0x0063	MOV AX, DI
 		r.AX.Word = r.DI.Word;
 		// 0x0065	NOT AX
@@ -1393,7 +1398,8 @@ internal class Program
 		r.ES.Word = r.DX.Word;
 		// 0x0071	OR DI, 0xfff0
 		r.DI.Word |= 0xfff0;
-	l74:
+
+		l74:
 		// 0x0074	LODSB
 		r.AX.Low = oMemory.ReadByte(r.DS.Word, r.SI.Word);
 		if (bDFlag)
@@ -1456,7 +1462,8 @@ internal class Program
 		// 0x0087	JMP + 0x7
 		goto l90;
 		// 0x0089	NOP
-	l8a:
+
+		l8a:
 		// 0x008a	CMP AL, 0xb2
 		// 0x008c	JNE + 0x6b
 		if (r.AX.Low != 0xb2) goto lf9;
@@ -1476,7 +1483,8 @@ internal class Program
 			}
 			r.CX.Word--;
 		}
-	l90:
+
+		l90:
 		// 0x0090	MOV AL, DL
 		r.AX.Low = r.DX.Low;
 		// 0x0092	TEST AL, 0x1
@@ -1493,7 +1501,8 @@ internal class Program
 		bDFlag = false;
 		// 0x00a0	XOR DX, DX
 		r.DX.Word = 0;
-	la2:
+
+		la2:
 		// 0x00a2	LODSW
 		r.AX.Word = oMemory.ReadWord(r.DS.Word, r.SI.Word);
 		if (bDFlag)
@@ -1514,7 +1523,8 @@ internal class Program
 		r.AX.Word += r.BX.Word;
 		// 0x00ab	MOV ES, AX
 		r.ES.Word = r.AX.Word;
-	lad:
+
+		lad:
 		// 0x00ad	LODSW
 		r.AX.Word = oMemory.ReadWord(r.DS.Word, r.SI.Word);
 		if (bDFlag)
@@ -1532,11 +1542,13 @@ internal class Program
 		if (r.DI.Word == 0xffff) goto lc6;
 		// 0x00b5	ADD ES:[DI], BX
 		oMemory.WriteWord(r.ES.Word, r.DI.Word, (ushort)(oMemory.ReadWord(r.ES.Word, r.DI.Word) + r.BX.Word));
-	lb8:
+
+		lb8:
 		// 0x00b8	LOOP - 0xd
 		r.CX.Word--;
 		if (r.CX.Word != 0) goto lad;
-	lba:
+
+		lba:
 		// 0x00ba	CMP DX, 0xf000
 		// 0x00be	JE + 0x16
 		if (r.DX.Word == 0xf000) goto ld6;
@@ -1544,7 +1556,8 @@ internal class Program
 		r.DX.Word += 0x1000;
 		// 0x00c4	JMP - 0x24
 		goto la2;
-	lc6:
+
+		lc6:
 		// 0x00c6	MOV AX, ES
 		r.AX.Word = r.ES.Word;
 		// 0x00c8	INC AX
@@ -1561,7 +1574,8 @@ internal class Program
 		r.ES.Word = r.AX.Word;
 		// 0x00d4	JMP - 0x1e
 		goto lb8;
-	ld6:
+
+		ld6:
 		// 0x00d6	MOV AX, BX
 		r.AX.Word = r.BX.Word;
 		// 0x00d8	MOV DI, [0x8]
@@ -1590,10 +1604,11 @@ internal class Program
 		r.IP.Word = oMemory.ReadWord(r.CS.Word, r.BX.Word);
 		r.CS.Word = oMemory.ReadWord(r.CS.Word, (ushort)(r.BX.Word + 2));
 		goto finished;
-	lf9:
+
+		lf9:
 		throw new Exception("Error decoding file");
 
-	finished:
+		finished:
 		return oMemory;
 	}
 
