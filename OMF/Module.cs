@@ -12,7 +12,7 @@ namespace Disassembler.OMF
 		private List<SegmentGroupDefinition> aSegmentGroups = new List<SegmentGroupDefinition>();
 		private List<PublicNameDefinition> aPublicNames = new List<PublicNameDefinition>();
 		private List<PublicNameDefinition> aLocalPublicNames = new List<PublicNameDefinition>();
-		private List<LogicalData> aDataRecords = new List<LogicalData>();
+		private List<DataRecord> aDataRecords = new List<DataRecord>();
 		private List<string> aExternalNames = new List<string>();
 
 		public CModule(string path)
@@ -27,11 +27,11 @@ namespace Disassembler.OMF
 			SegmentDefinition segDef = null;
 			SegmentGroupDefinition segGrp = null;
 			PublicNameDefinition pubDef = null;
-			LogicalData dataRec = null;
-			List<Fixup> aFixups = null;
+			DataRecord dataRec = null;
+			List<Fixup> aFixups;
 
-            // read records
-            while (!bModuleEnd && stream.Position < stream.Length)
+			// read records
+			while (!bModuleEnd && stream.Position < stream.Length)
             {
 				MemoryStream oRecord = ReadRecord(stream);
                 byte bType = ReadByte(oRecord);
@@ -46,7 +46,7 @@ namespace Disassembler.OMF
                         break;                    
                     case 0x88:
                         // COMENT Comment Record (Including all comment class extensions)
-                        log.WriteLine("Comment Record (0x{0:x2})", bType);
+                        log.WriteLine("COMENT - Comment Record (0x{0:x2})", bType);
 						// we can safely ignore those as they are completely uninformative
 						/*for (int i = 3; i < oRecord.Length - 1; i++)
 						{
@@ -58,12 +58,12 @@ namespace Disassembler.OMF
                         break;
                     case 0x8A:
                         // MODEND Module End Record
-						log.WriteLine("Module End Record (0x{0:x2})", bType);
+						log.WriteLine("MODEND - Module End Record (0x{0:x2})", bType);
                         bModuleEnd = true;
                         break;
                     case 0x8C:
                         // EXTDEF External Names Definition Record
-                        log.Write("External Names Definition Record (0x{0:x2})", bType);
+                        log.Write("EXTDEF - External Names Definition Record (0x{0:x2})", bType);
 						sTemp = ReadString(oRecord);
 						this.aExternalNames.Add(sTemp);
 						// type index is ignored
@@ -72,7 +72,7 @@ namespace Disassembler.OMF
                         break;
                     case 0x90:
                         // PUBDEF Public Names Definition Record
-                        log.Write("Public Names Definition Record (0x{0:x2})", bType);
+                        log.Write("PUBDEF - Public Names Definition Record (0x{0:x2})", bType);
 						pubDef = new PublicNameDefinition(oRecord, this.aSegments, this.aSegmentGroups);
 						this.aPublicNames.Add(pubDef);
 						if (pubDef.SegmentGroup != null)
@@ -90,11 +90,11 @@ namespace Disassembler.OMF
                         break;
                     case 0x94:
                         // LINNUM Line Numbers Record
-                        log.WriteLine("Line Numbers Record (0x{0:x2})", bType);
+                        log.WriteLine("LINNUM - Line Numbers Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0x96:
                         // LNAMES List of Names Record
-                        log.Write("List of Names Record (0x{0:x2})", bType);
+                        log.Write("LNAMES - List of Names Record (0x{0:x2})", bType);
 						//aNames.Clear();
 						while (oRecord.Position < oRecord.Length - 1)
 						{
@@ -106,7 +106,7 @@ namespace Disassembler.OMF
                         break;
                     case 0x98:
                         // SEGDEF Segment Definition Record
-                        log.Write("Segment Definition Record (0x{0:x2})", bType);
+                        log.Write("SEGDEF - Segment Definition Record (0x{0:x2})", bType);
 						segDef = new SegmentDefinition(oRecord, aNameList);
 						aSegments.Add(segDef);
 						log.WriteLine(": {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}", 
@@ -116,7 +116,7 @@ namespace Disassembler.OMF
                         break;
                     case 0x9A:
                         // GRPDEF Segment Group Definition Record
-                        log.Write("Segment Group Definition Record (0x{0:x2})", bType);
+                        log.Write("GRPDEF - Segment Group Definition Record (0x{0:x2})", bType);
 						segGrp = new SegmentGroupDefinition(oRecord, aNameList);
 						this.aSegmentGroups.Add(segGrp);
 						log.Write(" : '{0}' {{", segGrp.Name);
@@ -131,101 +131,75 @@ namespace Disassembler.OMF
                     case 0x9C:
                         // FIXUPP Fixup Record
 						// unclear in the specification, had to do analysis
-                        log.Write("Fixup Record (0x{0:x2})", bType);
+                        log.Write("FIXUPP - Fixup Record (0x{0:x2})", bType);
 						log.Write("(");
-						/*int iCount = 0;
-						oRecord.Seek(0, SeekOrigin.Begin);
-						while (oRecord.Position < oRecord.Length)
-						{
-							if (iCount > 0)
-								log.Write(", ");
-							int iByte = ReadByte(oRecord);
-							sTemp = Convert.ToString(iByte, 2);
-							while (sTemp.Length < 8)
-							{
-								sTemp = "0" + sTemp;
-							}
-							log.Write("0x{0:x2} [{1}]", iByte, sTemp);
-							iCount++;
-						}
-						log.WriteLine(")");
-						oRecord.Seek(3, SeekOrigin.Begin);*/
 
 						aFixups = new List<Fixup>();
-
 						while (oRecord.Position < oRecord.Length - 1)
 						{
 							aFixups.Add(new Fixup(oRecord));
 						}
 
 						// sort ascending by offset
-						aFixups.Sort(Fixup.CompareByOffset);
+						//this.aFixups.Sort(Fixup.CompareByOffset);
 
-						this.aDataRecords[this.aDataRecords.Count - 1].Fixups.AddRange(aFixups);
 						log.WriteLine("[");
 						for (int i = 0; i < aFixups.Count; i++)
 						{
 							if (i > 0)
 								log.WriteLine(", ");
-							Fixup item = aFixups[i];
-							if (item.CompareType(FixupItemTypeEnum.Thread))
+							Fixup fixup = aFixups[i];
+							if (fixup.Type == FixupTypeEnum.TargetThread)
 							{
-								if (item.CompareType(FixupItemTypeEnum.Frame))
-								{
-									log.Write("(Frame thread: {0}, Method: {1}",
-										item.FrameThread, item.FrameMethod);
-									if (item.HasFrameIndex)
-										log.Write(", Index: {0}", item.FrameIndex);
-									log.Write(")");
-								}
-								else
-								{
-									log.Write("(Target thread: {0}, Method: {1}",
-										item.TargetThread, item.TargetMethod);
-									if (item.HasTargetIndex)
-										log.Write(", Index: {0}", item.TargetIndex);
-									log.Write(")");
-								}
+								log.Write("(Target thread: {0}", fixup.TargetMethod);
+								log.Write(", Thread index: {0}", fixup.ThreadIndex);
+								log.Write(", Index: {0}", fixup.Index);
+								log.Write(")");
+							}
+							else if (fixup.Type == FixupTypeEnum.FrameThread)
+							{
+								log.Write("(Frame thread: {0}", fixup.FrameMethod);
+								log.Write(", Thread index: {0}", fixup.ThreadIndex);
+								if (fixup.Index >= 0)
+									log.Write(", Index: {0}", fixup.Index);
+								log.Write(")");
 							}
 							else
 							{
-								log.Write("(Fix type: {0}, Location: {1}, DataOffset: 0x{2:x4}",
-									(item.CompareType(FixupItemTypeEnum.SegmentRelativeFixup) ? "SegmentRelativeFixup" : "SelfRelativeFixup"),
-									item.LocationType, item.Offset);
-
-								if (item.CompareType(FixupItemTypeEnum.Frame))
-								{
-									log.Write(", Frame method: {0}", item.FrameMethod);
-									if (item.HasFrameIndex)
-										log.Write(", Index: {0}", item.FrameIndex);
-								}
-								else
-								{
-									log.Write(", Frame thread: {0}", item.FrameThread);
-								}
-
-								if (item.CompareType(FixupItemTypeEnum.Target))
-								{
-									log.Write(", Target method: {0}", item.TargetMethod);
-									if (item.HasTargetIndex)
-										log.Write(", Index: {0}", item.TargetIndex);
-								}
-								else
-								{
-									log.Write(", Target thread: {0}", item.TargetThread);
-									if (item.HasTargetDisplacement)
-										log.Write(", Displacement: {0}", item.TargetDisplacement);
-								}
-
+								log.Write("(Fixup: {0}, Location: {1}, DataOffset: 0x{2:x4}",
+									fixup.FixupMode, fixup.FixupLocationType, fixup.DataOffset);
+								if (fixup.FrameMethod != FrameMethodEnum.Undefined)
+									log.Write(", Frame method: {0}", fixup.FrameMethod);
+								log.Write(", Frame thread index: {0}", fixup.FrameThreadIndex);
+								if (fixup.TargetMethod != TargetMethodEnum.Undefined)
+									log.Write(", Target method: {0}", fixup.TargetMethod);
+								log.Write(", Target thread index: {0}", fixup.TargetThreadIndex);
 								log.Write(")");
+							}
+
+							switch (fixup.Type)
+							{
+								case FixupTypeEnum.FrameThread:
+								case FixupTypeEnum.TargetThread:
+									break;
+								case FixupTypeEnum.Fixup:
+									if (this.aDataRecords.Count > 0)
+									{
+										this.aDataRecords[this.aDataRecords.Count - 1].Fixups.Add(fixup);
+									}
+									else
+									{
+										throw new Exception("No data record before FIXUPP record");
+									}
+									break;
 							}
 						}
 						log.WriteLine("]");
                         break;
                     case 0xA0:
                         // LEDATA Logical Enumerated Data Record
-                        log.Write("Logical Enumerated Data Record (0x{0:x2})", bType);
-						dataRec = new LogicalData(oRecord, this.aSegments);
+                        log.Write("LEDATA - Logical Enumerated Data Record (0x{0:x2})", bType);
+						dataRec = new DataRecord(oRecord, this.aSegments, false);
 						aDataRecords.Add(dataRec);
 						log.Write(" '{0}':0x{1:x4} (", dataRec.Segment.Name, dataRec.Offset);
 						for (int i = 0; i < dataRec.Data.Length; i++)
@@ -238,24 +212,39 @@ namespace Disassembler.OMF
                         break;
                     case 0xA2:
                         // LIDATA Logical Iterated Data Record
-                        log.WriteLine("Logical Iterated Data Record (0x{0:x2})", bType);
-                        break;
+                        log.Write("LIDATA - Logical Iterated Data Record (0x{0:x2})", bType);
+						dataRec = new DataRecord(oRecord, this.aSegments, true);
+						aDataRecords.Add(dataRec);
+						log.Write(" '{0}':0x{1:x4} (", dataRec.Segment.Name, dataRec.Offset);
+						for (int i = 0; i < dataRec.Data.Length; i++)
+						{
+							if (i > 0)
+								log.Write(", ");
+							log.Write("0x{0:x2}", dataRec.Data[i]);
+						}
+						log.WriteLine(")");
+						break;
                     case 0xB0:
                         // COMDEF Communal Names Definition Record
-                        log.WriteLine("Communal Names Definition Record (0x{0:x2})", bType);
+                        log.WriteLine("COMDEF - Communal Names Definition Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0xB2:
-                        // BAKPAT Backpatc Record
-                        log.WriteLine("Backpatc Record (0x{0:x2})", bType);
+                        // BAKPAT Backpatch Record
+                        log.WriteLine("BAKPAT - Backpatch Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0xB4:
 					case 0xB5:
                         // LEXTDEF Local External Names Definition Record
-                        log.WriteLine("Local External Names Definition Record (0x{0:x2})", bType);
-                        break;
+                        log.Write("LEXTDEF - Local External Names Definition Record (0x{0:x2})", bType);
+						sTemp = ReadString(oRecord);
+						this.aExternalNames.Add(sTemp);
+						// type index is ignored
+						ReadByte(oRecord);
+						log.WriteLine("'{0}'", sTemp);
+						break;
                     case 0xB6:
                         // LPUBDEF Local Public Names Definition Record
-                        log.Write("Local Public Names Definition Record (0x{0:x2})", bType);
+                        log.Write("LPUBDEF - Local Public Names Definition Record (0x{0:x2})", bType);
 						pubDef = new PublicNameDefinition(oRecord, this.aSegments, this.aSegmentGroups);
 						this.aLocalPublicNames.Add(pubDef);
 						if (pubDef.SegmentGroup != null)
@@ -273,42 +262,42 @@ namespace Disassembler.OMF
                         break;
                     case 0xB8:
                         // LCOMDEF Local Communal Names Definition Record
-                        log.WriteLine("Local Communal Names Definition Record (0x{0:x2})", bType);
+                        log.WriteLine("LCOMDEF - Local Communal Names Definition Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0xBC:
                         // CEXTDEF COMDAT External Names Definition Record
-                        log.WriteLine("External Names Definition Record (0x{0:x2})", bType);
+                        log.WriteLine("CEXTDEF - External Names Definition Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0xC2:
                     case 0xC3:
                         // COMDAT Initialized Communal Data Record
-                        log.WriteLine("Initialized Communal Data Record (0x{0:x2})", bType);
+                        log.WriteLine("COMDAT - Initialized Communal Data Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0xC4:
                     case 0xC5:
                         // LINSYM Symbol Line Numbers Record
-                        log.WriteLine("Symbol Line Numbers Record (0x{0:x2})", bType);
+                        log.WriteLine("LINSYM - Symbol Line Numbers Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0xC6:
                         // ALIAS Alias Definition Record
-                        log.WriteLine("Alias Definition Record (0x{0:x2})", bType);
+                        log.WriteLine("ALIAS - Alias Definition Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0xC8:
                     case 0xC9:
                         // NBKPAT Named Backpatc Record
-                        log.WriteLine("Named Backpatc Record (0x{0:x2})", bType);
+                        log.WriteLine("NBKPAT - Named Backpatc Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0xCA:
                         // LLNAMES Local Logical Names Definition Record
-                        log.WriteLine("Local Logical Names Definition Record (0x{0:x2})", bType);
+                        log.WriteLine("LLNAMES - Local Logical Names Definition Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0xCC:
                         // VERNUM OMF Version Number Record
-                        log.WriteLine("OMF Version Number Record (0x{0:x2})", bType);
+                        log.WriteLine("VERNUM - OMF Version Number Record (0x{0:x2}), Ignored", bType);
                         break;
                     case 0xCE:
                         // VENDEXT Vendor-specific OMF Extension Record
-                        log.WriteLine("Vendor-specific OMF Extension Record (0x{0:x2})", bType);
+                        log.WriteLine("VENDEXT - Vendor-specific OMF Extension Record (0x{0:x2}), Ignored", bType);
                         break;
                     default:
                         throw new Exception("Unknown Record type");
@@ -404,7 +393,7 @@ namespace Disassembler.OMF
 					iChecksum &= 0xff;
 				}
 
-				if (iChecksum != 0)
+				if (iChecksum != 0 && iChecksum != 0xff)
 				{
 					throw new Exception("Record checksum is invalid");
 				}
@@ -453,7 +442,7 @@ namespace Disassembler.OMF
 			}
 		}
 
-		public List<LogicalData> DataRecords
+		public List<DataRecord> DataRecords
 		{
 			get
 			{

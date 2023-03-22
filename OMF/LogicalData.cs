@@ -9,7 +9,6 @@ namespace Disassembler.OMF
 		private SegmentDefinition oSegment = null;
 		private int iOffset = 0;
 		private byte[] aData = new byte[] { };
-		private List<Fixup> aFixups = new List<Fixup>();
 
 		public LogicalData(Stream stream, List<SegmentDefinition> segments)
 		{
@@ -48,18 +47,6 @@ namespace Disassembler.OMF
 			get
 			{
 				return this.aData;
-			}
-		}
-
-		public List<Fixup> Fixups
-		{
-			get
-			{
-				return this.aFixups;
-			}
-			set
-			{
-				this.aFixups = value;
 			}
 		}
 	}

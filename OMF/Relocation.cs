@@ -4,21 +4,17 @@ using System.IO;
 
 namespace Disassembler.OMF
 {
-	[Flags]
-	public enum FixupItemTypeEnum : int
+	public enum FixupTypeEnum
 	{
-		Thread = 1,
-		Fixup = 0,
-		Target = 2,
-		TargetThreadLookup = 0,
-		Frame = 4,
-		FrameThreadLookup = 0,
-		SegmentRelativeFixup = 8,
-		SelfRelativeFixup = 0
+		Undefined = -1,
+		TargetThread = 0,
+		FrameThread = 1,
+		Fixup = 2
 	}
 
-	public enum FixupTargetEnum
+	public enum TargetMethodEnum
 	{
+		Undefined = -1,
 		SegDefIndex = 0,
 		GrpDefIndex = 1,
 		ExtDefIndex = 2,
@@ -29,33 +25,62 @@ namespace Disassembler.OMF
 		NotSupported7 = 7
 	}
 
-	public enum FixupFrameEnum
+	public enum FrameMethodEnum
 	{
-		FrameBySegDefIndex = 0,
-		FrameByGrpDefIndex = 1,
-		FrameByExtDefIndex = 2,
+		Undefined=-1,
+		SegDefIndex = 0,
+		GrpDefIndex = 1,
+		ExtDefIndex = 2,
 		NotSupported3 = 3,
-		FrameByPreviousDataRecordSegmentIndex = 4,
-		FrameByTarget = 5,
+		PreviousDataRecordSegmentIndex = 4,
+		TargetIndex = 5,
 		NotSupported6 = 6,
 		NotSupported7 = 7
 	}
 
+	public enum FixupModeEnum
+	{
+		Undefined = -1,
+		SegmentRelative = 0,
+		SelfRelative = 1
+	}
+
+	public enum FixupLocationTypeEnum
+	{
+		Undefined = -1,
+		LowOrderByte = 0,
+		Offset16bit = 1,
+		Base16bit = 2,
+		LongPointer32bit = 3,
+		HighOrderByte = 4,
+		Offset16bit_1 = 5,
+		NotSupported6 = 6,
+		NotSupported7 = 7,
+		NotSupported8 = 8,
+		Offset32bit = 9,
+		NotSupported10 = 10,
+		Pointer48bit = 11,
+		NotSupported12 = 12,
+		Offset32bit_1 = 13,
+		NotSupported14 = 14,
+		NotSupported15 = 15
+	}
+
 	public class Fixup
 	{
-		private FixupItemTypeEnum eType = FixupItemTypeEnum.Fixup;
+		private FixupTypeEnum eType = FixupTypeEnum.Undefined;
 
-		private LocationTypeEnum eLocationType = LocationTypeEnum.Undefined;
-		private int iOffset = 0;
+		private TargetMethodEnum eTargetMethod = TargetMethodEnum.Undefined;
+		private FrameMethodEnum eFrameMethod = FrameMethodEnum.Undefined;
+		private int iThreadIndex = -1;
+		private int iIndex = -1;
+
+		private FixupModeEnum eFixupMode = FixupModeEnum.Undefined;
+		private FixupLocationTypeEnum eFixupLocationType = FixupLocationTypeEnum.Undefined;
+		private int iDataOffset = 0;
+		private int iFrameThreadIndex = -1;
+		private int iTargetThreadIndex = -1;
 		private int iTargetDisplacement = -1;
-
-		private FixupTargetEnum eTargetMethod = FixupTargetEnum.SegDefIndex;
-		private int iTargetIndex = -1;
-		private int iTargetThread = -1;
-
-		private FixupFrameEnum eFrameMethod = FixupFrameEnum.FrameBySegDefIndex;
-		private int iFrameIndex = -1;
-		private int iFrameThread = -1;
 
 		public Fixup(Stream stream)
 		{
@@ -63,102 +88,68 @@ namespace Disassembler.OMF
 			if ((iType & 0x80) != 0)
 			{
 				// it's a Fixup subrecord
-				this.eType = FixupItemTypeEnum.Fixup;
-				if ((iType & 0x40) != 0)
-				{
-					this.eType |= FixupItemTypeEnum.SegmentRelativeFixup;
-				}
-				else
-				{
-					this.eType |= FixupItemTypeEnum.SelfRelativeFixup;
-				}
-				switch ((iType & 0x3c) >> 2)
-				{
-					case 1:
-					case 5:
-						this.eLocationType = LocationTypeEnum.Offset16;
-						break;
-					case 2:
-						this.eLocationType = LocationTypeEnum.Segment16;
-						break;
-					case 3:
-						this.eLocationType = LocationTypeEnum.SegmentOffset32;
-						break;
-					default:
-						throw new Exception("Undefined Location type");
-				}
-
-				this.iOffset = ((iType & 0x3) << 8) | CModule.ReadByte(stream);
+				this.eType = FixupTypeEnum.Fixup;
+				this.eFixupMode = (FixupModeEnum)((iType & 0x40) >> 6);
+				this.eFixupLocationType = (FixupLocationTypeEnum)((iType & 0x2c) >> 2);
+				this.iDataOffset = ((iType & 0x3) << 8) | CModule.ReadByte(stream);
 
 				iType = CModule.ReadByte(stream);
 
 				if ((iType & 0x80) != 0)
 				{
-					this.iFrameThread = (iType & 0x30) >> 4;
-					this.eType |= FixupItemTypeEnum.FrameThreadLookup;
+					this.iFrameThreadIndex = (iType & 0x70) >> 4;
 				}
 				else
 				{
-					this.eFrameMethod = (FixupFrameEnum)((iType & 0x70) >> 4);
+					this.eFrameMethod = (FrameMethodEnum)((iType & 0x70) >> 4);
 					if ((int)this.eFrameMethod < 3)
 					{
-						this.iFrameIndex = CModule.ReadByte(stream);
+						this.iFrameThreadIndex = CModule.ReadByte(stream);
 					}
-					this.eType |= FixupItemTypeEnum.Frame;
 				}
 
 				if ((iType & 0x8) != 0)
 				{
-					this.iTargetThread = iType & 0x3;
+					this.iTargetThreadIndex = iType & 0x3;
 					if ((iType & 0x4) == 0)
 					{
 						this.iTargetDisplacement = CModule.ReadUInt16(stream);
 					}
-					this.eType |= FixupItemTypeEnum.TargetThreadLookup;
 				}
 				else
 				{
-					this.eTargetMethod = (FixupTargetEnum)(iType & 0x3);
-					if ((int)this.eTargetMethod < 3)
-					{
-						this.iTargetIndex = CModule.ReadByte(stream);
-					}
-					this.eType |= FixupItemTypeEnum.Target;
+					this.eTargetMethod = (TargetMethodEnum)(iType & 0x7);
 				}
 			}
 			else
 			{
-				// it's a thread subrecord
-				this.eType = FixupItemTypeEnum.Thread;
+				// it's a Thread subrecord
 				if ((iType & 0x40) != 0)
 				{
-					this.eType |= FixupItemTypeEnum.Frame;
-					this.eFrameMethod = (FixupFrameEnum)((iType & 0x1c) >> 2);
-					if ((int)this.eFrameMethod < 3)
+					this.eType = FixupTypeEnum.FrameThread;
+					this.eFrameMethod = (FrameMethodEnum)((iType & 0x1c) >> 2);
+					this.iThreadIndex = iType & 0x3;
+
+					switch (this.eFrameMethod)
 					{
-						this.iFrameIndex = CModule.ReadByte(stream);
+						case FrameMethodEnum.SegDefIndex:
+						case FrameMethodEnum.GrpDefIndex:
+						case FrameMethodEnum.ExtDefIndex:
+							this.iIndex = CModule.ReadByte(stream);
+							break;
 					}
-					this.iFrameThread = iType & 0x3;
 				}
 				else
 				{
-					this.eType |= FixupItemTypeEnum.Target;
-					this.eTargetMethod = (FixupTargetEnum)((iType & 0x1c) >> 2);
-					if ((int)this.eTargetMethod < 3)
-					{
-						this.iTargetIndex = CModule.ReadByte(stream);
-					}
-					this.iTargetThread = iType & 0x3;
+					this.eType = FixupTypeEnum.TargetThread;
+					this.eTargetMethod = (TargetMethodEnum)((iType & 0x1c) >> 2);
+					this.iThreadIndex = iType & 0x3;
+					this.iIndex = CModule.ReadByte(stream);
 				}
 			}
 		}
 
-		public bool CompareType(FixupItemTypeEnum type)
-		{
-			return (this.eType & type) == type;
-		}
-
-		public FixupItemTypeEnum Type
+		public FixupTypeEnum Type
 		{
 			get
 			{
@@ -166,11 +157,60 @@ namespace Disassembler.OMF
 			}
 		}
 
-		public LocationTypeEnum LocationType
+		public TargetMethodEnum TargetMethod
+		{
+			get { return this.eTargetMethod; }
+		}
+
+		public FrameMethodEnum FrameMethod
+		{
+			get { return this.eFrameMethod; }
+		}
+
+		public int ThreadIndex
+		{
+			get { return this.iThreadIndex; }
+		}
+
+		public int Index
+		{
+			get { return this.iIndex; }
+		}
+
+		public FixupModeEnum FixupMode
+		{
+			get { return this.eFixupMode; }
+		}
+
+		public FixupLocationTypeEnum FixupLocationType
+		{
+			get { return this.eFixupLocationType; }
+		}
+
+		public LocationTypeEnum ToLocationType
 		{
 			get
 			{
-				return this.eLocationType;
+				switch (this.eFixupLocationType)
+				{
+					case FixupLocationTypeEnum.LowOrderByte:
+					case FixupLocationTypeEnum.HighOrderByte:
+						return LocationTypeEnum.Undefined;
+
+					case FixupLocationTypeEnum.Offset16bit:
+					case FixupLocationTypeEnum.Offset16bit_1:
+						return LocationTypeEnum.Offset16;
+
+					case FixupLocationTypeEnum.Base16bit:
+						return LocationTypeEnum.Segment16;
+
+					case FixupLocationTypeEnum.LongPointer32bit:
+						return LocationTypeEnum.SegmentOffset32;
+
+					default:
+						return LocationTypeEnum.Undefined;
+						return LocationTypeEnum.Undefined;
+				}
 			}
 		}
 
@@ -178,64 +218,45 @@ namespace Disassembler.OMF
 		{
 			get
 			{
-				switch (this.eLocationType)
+				switch (this.eFixupLocationType)
 				{
-					case LocationTypeEnum.Offset16:
-					case LocationTypeEnum.Segment16:
+					case FixupLocationTypeEnum.LowOrderByte:
+					case FixupLocationTypeEnum.HighOrderByte:
+						return 1;
+					case FixupLocationTypeEnum.Offset16bit:
+					case FixupLocationTypeEnum.Offset16bit_1:
+					case FixupLocationTypeEnum.Base16bit:
 						return 2;
-					case LocationTypeEnum.SegmentOffset32:
+					case FixupLocationTypeEnum.LongPointer32bit:
+					case FixupLocationTypeEnum.Offset32bit:
+					case FixupLocationTypeEnum.Offset32bit_1:
 						return 4;
+					case FixupLocationTypeEnum.Pointer48bit:
+						return 6;
 					default:
-						return -1;					
+						return 0;
 				}
 			}
 		}
 
-		public int Offset
+		public int DataOffset
+		{
+			get { return this.iDataOffset; }
+		}
+
+		public int FrameThreadIndex
 		{
 			get
 			{
-				return this.iOffset;
+				return this.iFrameThreadIndex;
 			}
 		}
 
-		public FixupTargetEnum TargetMethod
+		public int TargetThreadIndex
 		{
 			get
 			{
-				return this.eTargetMethod;
-			}
-		}
-
-		public int TargetThread
-		{
-			get
-			{
-				return this.iTargetThread;
-			}
-		}
-
-		public bool HasTargetIndex
-		{
-			get
-			{
-				return (int)this.eTargetMethod < 3;
-			}
-		}
-
-		public int TargetIndex
-		{
-			get
-			{
-				return this.iTargetIndex;
-			}
-		}
-
-		public bool HasTargetDisplacement
-		{
-			get
-			{
-				return this.iTargetDisplacement >= 0;
+				return this.iTargetThreadIndex;
 			}
 		}
 
@@ -244,73 +265,6 @@ namespace Disassembler.OMF
 			get
 			{
 				return this.iTargetDisplacement;
-			}
-		}
-
-		public FixupFrameEnum FrameMethod
-		{
-			get
-			{
-				return this.eFrameMethod;
-			}
-		}
-
-		public int FrameThread
-		{
-			get
-			{
-				return this.iFrameThread;
-			}
-		}
-
-		public bool HasFrameIndex
-		{
-			get
-			{
-				return (int)this.eFrameMethod < 3;
-			}
-		}
-
-		public int FrameIndex
-		{
-			get
-			{
-				return this.iFrameIndex;
-			}
-		}
-
-		public static int CompareByOffset(Fixup item1, Fixup item2)
-		{
-			if (item1 == null)
-			{
-				if (item2 == null)
-				{
-					// If x is null and y is null, they're
-					// equal.
-					return 0;
-				}
-				// If x is null and y is not null, y
-				// is greater.
-				return -1;
-			}
-			else
-			{
-				// If x is not null...
-				if (item2 == null)
-				// ...and y is null, x is greater.
-				{
-					return 1;
-				}
-				else
-				{
-					if (item1.Offset == item2.Offset)
-						return 0;
-
-					if (item1.Offset < item2.Offset)
-						return -1;
-
-					return 1;
-				}
 			}
 		}
 	}

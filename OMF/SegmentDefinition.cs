@@ -37,6 +37,7 @@ namespace Disassembler.OMF
 		private string sName = null;
 		private string sClassName = null;
 		private string sOverlayName = null;
+		private List<Fixup> aFixups = new List<Fixup>();
 
 		public SegmentDefinition(Stream stream, List<string> names)
 		{
@@ -171,6 +172,18 @@ namespace Disassembler.OMF
 			get
 			{
 				return this.sOverlayName;
+			}
+		}
+
+		public List<Fixup> Fixups
+		{
+			get
+			{
+				return this.aFixups;
+			}
+			set
+			{
+				this.aFixups = value;
 			}
 		}
 	}
