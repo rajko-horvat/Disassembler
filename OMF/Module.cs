@@ -132,12 +132,27 @@ namespace Disassembler.OMF
                         // FIXUPP Fixup Record
 						// unclear in the specification, had to do analysis
                         log.Write("FIXUPP - Fixup Record (0x{0:x2})", bType);
-						log.Write("(");
-
-						aFixups = new List<Fixup>();
+						log.Write(" {");
+						/*oRecord.Position = 0;
+						int iFixCount = 0;
 						while (oRecord.Position < oRecord.Length - 1)
 						{
+							if (iFixCount > 0)
+								log.Write(", ");
+							log.Write($"0x{oRecord.ReadByte():x2}");
+							iFixCount++;
+						}
+						log.Write("}");
+						oRecord.Seek(3, SeekOrigin.Begin);*/
+
+						aFixups = new List<Fixup>();
+						//iFixCount = 0;
+						//log.WriteLine();
+						while (oRecord.Position < oRecord.Length - 1)
+						{
+							//log.WriteLine($"Index: {iFixCount}, Position: {oRecord.Position}");
 							aFixups.Add(new Fixup(oRecord));
+							//iFixCount++;
 						}
 
 						// sort ascending by offset
@@ -151,14 +166,14 @@ namespace Disassembler.OMF
 							Fixup fixup = aFixups[i];
 							if (fixup.Type == FixupTypeEnum.TargetThread)
 							{
-								log.Write("(Target thread: {0}", fixup.TargetMethod);
+								log.Write("\t(Target thread: {0}", fixup.TargetMethod);
 								log.Write(", Thread index: {0}", fixup.ThreadIndex);
 								log.Write(", Index: {0}", fixup.Index);
 								log.Write(")");
 							}
 							else if (fixup.Type == FixupTypeEnum.FrameThread)
 							{
-								log.Write("(Frame thread: {0}", fixup.FrameMethod);
+								log.Write("\t(Frame thread: {0}", fixup.FrameMethod);
 								log.Write(", Thread index: {0}", fixup.ThreadIndex);
 								if (fixup.Index >= 0)
 									log.Write(", Index: {0}", fixup.Index);
@@ -166,7 +181,7 @@ namespace Disassembler.OMF
 							}
 							else
 							{
-								log.Write("(Fixup: {0}, Location: {1}, DataOffset: 0x{2:x4}",
+								log.Write("\t(Fixup: {0}, Location: {1}, DataOffset: 0x{2:x4}",
 									fixup.FixupMode, fixup.FixupLocationType, fixup.DataOffset);
 								if (fixup.FrameMethod != FrameMethodEnum.Undefined)
 									log.Write(", Frame method: {0}", fixup.FrameMethod);
@@ -174,6 +189,7 @@ namespace Disassembler.OMF
 								if (fixup.TargetMethod != TargetMethodEnum.Undefined)
 									log.Write(", Target method: {0}", fixup.TargetMethod);
 								log.Write(", Target thread index: {0}", fixup.TargetThreadIndex);
+								log.Write(", Target displacement: {0}", fixup.TargetDisplacement);
 								log.Write(")");
 							}
 

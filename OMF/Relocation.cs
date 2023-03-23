@@ -41,8 +41,8 @@ namespace Disassembler.OMF
 	public enum FixupModeEnum
 	{
 		Undefined = -1,
-		SegmentRelative = 0,
-		SelfRelative = 1
+		SelfRelative = 0,
+		SegmentRelative = 1
 	}
 
 	public enum FixupLocationTypeEnum
@@ -90,7 +90,7 @@ namespace Disassembler.OMF
 				// it's a Fixup subrecord
 				this.eType = FixupTypeEnum.Fixup;
 				this.eFixupMode = (FixupModeEnum)((iType & 0x40) >> 6);
-				this.eFixupLocationType = (FixupLocationTypeEnum)((iType & 0x2c) >> 2);
+				this.eFixupLocationType = (FixupLocationTypeEnum)((iType & 0x3c) >> 2);
 				this.iDataOffset = ((iType & 0x3) << 8) | CModule.ReadByte(stream);
 
 				iType = CModule.ReadByte(stream);
@@ -110,15 +110,16 @@ namespace Disassembler.OMF
 
 				if ((iType & 0x8) != 0)
 				{
-					this.iTargetThreadIndex = iType & 0x3;
+					this.iTargetThreadIndex = iType & 0x7;
+				}
+				else
+				{
+					this.eTargetMethod = (TargetMethodEnum)(iType & 0x3);
+					this.iTargetThreadIndex = CModule.ReadByte(stream);
 					if ((iType & 0x4) == 0)
 					{
 						this.iTargetDisplacement = CModule.ReadUInt16(stream);
 					}
-				}
-				else
-				{
-					this.eTargetMethod = (TargetMethodEnum)(iType & 0x7);
 				}
 			}
 			else

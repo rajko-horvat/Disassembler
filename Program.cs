@@ -102,14 +102,14 @@ internal class Program
 	{
 		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\civ.exe");
 
-		Library oLibrary1 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\MLIBCR.lib");
+		Library oLibrary1 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\MLIBC7.lib");
 		/*Library oLibrary2 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\MLIBFP.lib");
 		Library oLibrary3 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\graphics.lib");
 		Library oLibrary4 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\em.lib");
 		Library oLibrary5 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\87.lib");*/
 
 		List<ModuleMatch> aMatches = new List<ModuleMatch>();
-		Console.WriteLine("Matching MLIBCR");
+		Console.WriteLine("Matching MLIBC7");
 		MatchLibraryToEXE(oLibrary1, mzEXE, aMatches);
 		/*Console.WriteLine("Matching MLIBFP");
 		MatchLibraryToEXE(oLibrary2, mzEXE, aMatches);
@@ -2587,6 +2587,9 @@ internal class Program
 
 	private static void MatchModuleToEXE(CModule module, MZExecutable exe, List<ModuleMatch> matches)
 	{
+		if (module.Name.EndsWith("crt0fp.asm"))
+			return;
+
 		// iterate through data records that contain code
 		for (int i = 0; i < module.DataRecords.Count; i++)
 		{
