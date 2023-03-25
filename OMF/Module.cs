@@ -13,7 +13,8 @@ namespace Disassembler.OMF
 		private List<PublicNameDefinition> aPublicNames = new List<PublicNameDefinition>();
 		private List<PublicNameDefinition> aLocalPublicNames = new List<PublicNameDefinition>();
 		private List<DataRecord> aDataRecords = new List<DataRecord>();
-		private List<string> aExternalNames = new List<string>();
+		private List<ExternalNameDefinition> aExternalNames = new List<ExternalNameDefinition>();
+		private List<ExternalNameDefinition> aLocalExternalNames = new List<ExternalNameDefinition>();
 
 		public CModule(string path)
 			: this(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read), new StreamWriter("moduleLog.txt"))
@@ -29,6 +30,7 @@ namespace Disassembler.OMF
 			PublicNameDefinition pubDef = null;
 			DataRecord dataRec = null;
 			List<Fixup> aFixups;
+			int iCount;
 
 			// read records
 			while (!bModuleEnd && stream.Position < stream.Length)
@@ -46,15 +48,16 @@ namespace Disassembler.OMF
                         break;                    
                     case 0x88:
                         // COMENT Comment Record (Including all comment class extensions)
-                        log.WriteLine("COMENT - Comment Record (0x{0:x2})", bType);
+                        log.Write("COMENT - Comment Record (0x{0:x2}) (", bType);
 						// we can safely ignore those as they are completely uninformative
-						/*for (int i = 3; i < oRecord.Length - 1; i++)
+						oRecord.Position = 0;
+						for (int i = 0; i < oRecord.Length; i++)
 						{
-							if (i > 3)
+							if (i > 0)
 								log.Write(", ");
 							log.Write("0x{0:x2}", ReadByte(oRecord));
 						}
-						log.WriteLine();*/
+						log.WriteLine(")");
                         break;
                     case 0x8A:
                         // MODEND Module End Record
@@ -63,12 +66,18 @@ namespace Disassembler.OMF
                         break;
                     case 0x8C:
                         // EXTDEF External Names Definition Record
-                        log.Write("EXTDEF - External Names Definition Record (0x{0:x2})", bType);
-						sTemp = ReadString(oRecord);
-						this.aExternalNames.Add(sTemp);
-						// type index is ignored
-						ReadByte(oRecord);
-						log.WriteLine("'{0}'", sTemp);
+                        log.Write("EXTDEF - External Names Definition Record (0x{0:x2}) {{", bType);
+						iCount = 0;
+						while (oRecord.Position < oRecord.Length - 1)
+						{
+							ExternalNameDefinition extDef = new ExternalNameDefinition(oRecord);
+							this.aExternalNames.Add(extDef);
+							if (iCount > 0)
+								log.Write(", ");
+							log.Write("'{0}'(0x{1:x2})", extDef.Name, extDef.TypeIndex);
+							iCount++;
+						}
+						log.WriteLine("}");
                         break;
                     case 0x90:
                         // PUBDEF Public Names Definition Record
@@ -217,7 +226,7 @@ namespace Disassembler.OMF
                         log.Write("LEDATA - Logical Enumerated Data Record (0x{0:x2})", bType);
 						dataRec = new DataRecord(oRecord, this.aSegments, false);
 						aDataRecords.Add(dataRec);
-						log.Write(" '{0}':0x{1:x4} (", dataRec.Segment.Name, dataRec.Offset);
+						log.Write(" '{0}':0x{1:x4}, Length: 0x{2:x4} (", dataRec.Segment.Name, dataRec.Offset, dataRec.Data.Length);
 						for (int i = 0; i < dataRec.Data.Length; i++)
 						{
 							if (i > 0)
@@ -231,7 +240,7 @@ namespace Disassembler.OMF
                         log.Write("LIDATA - Logical Iterated Data Record (0x{0:x2})", bType);
 						dataRec = new DataRecord(oRecord, this.aSegments, true);
 						aDataRecords.Add(dataRec);
-						log.Write(" '{0}':0x{1:x4} (", dataRec.Segment.Name, dataRec.Offset);
+						log.Write(" '{0}':0x{1:x4}, Length: 0x{2:x4} (", dataRec.Segment.Name, dataRec.Offset, dataRec.Data.Length);
 						for (int i = 0; i < dataRec.Data.Length; i++)
 						{
 							if (i > 0)
@@ -251,12 +260,18 @@ namespace Disassembler.OMF
                     case 0xB4:
 					case 0xB5:
                         // LEXTDEF Local External Names Definition Record
-                        log.Write("LEXTDEF - Local External Names Definition Record (0x{0:x2})", bType);
-						sTemp = ReadString(oRecord);
-						this.aExternalNames.Add(sTemp);
-						// type index is ignored
-						ReadByte(oRecord);
-						log.WriteLine("'{0}'", sTemp);
+                        log.Write("LEXTDEF - Local External Names Definition Record (0x{0:x2}) {{", bType);
+						iCount = 0;
+						while (oRecord.Position < oRecord.Length - 1)
+						{
+							ExternalNameDefinition extDef = new ExternalNameDefinition(oRecord);
+							this.aLocalExternalNames.Add(extDef);
+							if (iCount > 0)
+								log.Write(", ");
+							log.Write("'{0}'(0x{1:x2})", extDef.Name, extDef.TypeIndex);
+							iCount++;
+						}
+						log.WriteLine("}");
 						break;
                     case 0xB6:
                         // LPUBDEF Local Public Names Definition Record
@@ -466,11 +481,19 @@ namespace Disassembler.OMF
 			}
 		}
 
-		public List<string> ExternalNames
+		public List<ExternalNameDefinition> ExternalNames
 		{
 			get
 			{
 				return this.aExternalNames;
+			}
+		}
+
+		public List<ExternalNameDefinition> LocalExternalNames
+		{
+			get
+			{
+				return this.aLocalExternalNames;
 			}
 		}
 	}

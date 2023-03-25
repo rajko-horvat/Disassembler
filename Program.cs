@@ -873,7 +873,7 @@ internal class Program
 
 		for (int i = 0; i < oModule.ExternalNames.Count; i++)
 		{
-			if (oModule.ExternalNames[i].ToLower().Equals(sWinMain))
+			if (oModule.ExternalNames[i].Name.ToLower().Equals(sWinMain))
 			{
 				iWinMainIndex = i + 1;
 				break;
