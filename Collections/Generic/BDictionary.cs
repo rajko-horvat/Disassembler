@@ -1,21 +1,46 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Runtime.Serialization;
-using System.Security.Permissions;
-using System.Text;
 using System.Xml.Serialization;
 using IRB.Collections.Generic.Trees;
 
 namespace IRB.Collections.Generic
 {
+	/// <summary>
+	/// Implementation of serializable Dictionary class which uses BTree indexing implementation
+	/// 
+	/// Authors:
+	/// 	Rajko Horvat (https://github.com/rajko-horvat)
+	/// 
+	/// License:
+	/// 	MIT
+	/// 	Copyright (c) 2011-2023, Ruđer Bošković Institute
+	///		
+	/// 	Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
+	/// 	and associated documentation files (the "Software"), to deal in the Software without restriction, 
+	/// 	including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+	/// 	and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, 
+	/// 	subject to the following conditions: 
+	/// 	The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+	/// 	The names of authors and contributors may not be used to endorse or promote Software products derived from this software 
+	/// 	without specific prior written permission.
+	/// 	
+	/// 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+	/// 	INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+	/// 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+	/// 	IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, 
+	/// 	DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+	/// 	ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+	/// </summary>
 	[Serializable]
 	public class BDictionary<TKey, TValue>
 		: IList<BKeyValuePair<TKey, TValue>>, ICollection<BKeyValuePair<TKey, TValue>>, IEnumerable<BKeyValuePair<TKey, TValue>>
+		where TKey : notnull
+		where TValue : notnull
 	{
-		protected List<BKeyValuePair<TKey, TValue>> aItems = null;
+		protected List<BKeyValuePair<TKey, TValue>> aItems;
 		private BTree oBTree = new BTree();
-		private KeyCollection oKeyCollection = null;
-		private ValueCollection oValueCollection = null;
+		private KeyCollection oKeyCollection;
+		private ValueCollection oValueCollection;
 
 		public BDictionary()
 		{
@@ -38,7 +63,7 @@ namespace IRB.Collections.Generic
 			foreach (BKeyValuePair<TKey, TValue> item in collection)
 			{
 				int iHashCode = item.Key.GetHashCode();
-				BKeyIndexPair pair = oBTree.Find(iHashCode);
+				BKeyIndexPair? pair = oBTree.Find(iHashCode);
 				if (pair == null)
 				{
 					this.aItems.Add(item);
@@ -75,10 +100,10 @@ namespace IRB.Collections.Generic
 		public void Add(TKey key, TValue value)
 		{
 			int iKeyHash = key.GetHashCode();
-			BKeyIndexPair pair = oBTree.Find(iKeyHash);
+			BKeyIndexPair? pair = oBTree.Find(iKeyHash);
 			if (pair != null)
 			{
-				this.aItems[pair.Index] = new BKeyValuePair<TKey,TValue>(key, value);
+				this.aItems[pair.Index] = new BKeyValuePair<TKey, TValue>(key, value);
 			}
 			else
 			{
@@ -101,7 +126,7 @@ namespace IRB.Collections.Generic
 		public void RemoveByKey(TKey key)
 		{
 			int iKeyHash = key.GetHashCode();
-			BKeyIndexPair pair = oBTree.Find(iKeyHash);
+			BKeyIndexPair? pair = oBTree.Find(iKeyHash);
 			if (pair == null)
 			{
 				throw new InvalidOperationException(string.Format("This collection doesn't contain key '{0}'", key));
@@ -113,7 +138,7 @@ namespace IRB.Collections.Generic
 
 		public bool ContainsKey(TKey key)
 		{
-			BKeyIndexPair pair = oBTree.Find(key.GetHashCode());
+			BKeyIndexPair? pair = oBTree.Find(key.GetHashCode());
 			if (pair != null)
 			{
 				return true;
@@ -132,12 +157,12 @@ namespace IRB.Collections.Generic
 				}
 			}
 
-			return false;			
+			return false;
 		}
 
 		public int IndexOfKey(TKey key)
 		{
-			BKeyIndexPair pair = oBTree.Find(key.GetHashCode());
+			BKeyIndexPair? pair = oBTree.Find(key.GetHashCode());
 			if (pair != null)
 			{
 				return pair.Index;
@@ -164,7 +189,7 @@ namespace IRB.Collections.Generic
 
 		public TValue GetValueByKey(TKey key)
 		{
-			BKeyIndexPair pair = oBTree.Find(key.GetHashCode());
+			BKeyIndexPair? pair = oBTree.Find(key.GetHashCode());
 			if (pair != null)
 			{
 				return this.aItems[pair.Index].Value;
@@ -175,7 +200,7 @@ namespace IRB.Collections.Generic
 
 		public void SetValueByKey(TKey key, TValue value)
 		{
-			BKeyIndexPair pair = oBTree.Find(key.GetHashCode());
+			BKeyIndexPair? pair = oBTree.Find(key.GetHashCode());
 			if (pair == null)
 			{
 				throw new InvalidOperationException(string.Format("This collection doesn't contain key '{0}'", key));
@@ -188,7 +213,7 @@ namespace IRB.Collections.Generic
 
 		public int IndexOf(BKeyValuePair<TKey, TValue> item)
 		{
-			BKeyIndexPair pair = oBTree.Find(item.Key.GetHashCode());
+			BKeyIndexPair? pair = oBTree.Find(item.Key.GetHashCode());
 			if (pair != null)
 			{
 				return pair.Index;
@@ -229,7 +254,7 @@ namespace IRB.Collections.Generic
 				}
 				else
 				{
-					BKeyIndexPair pair = oBTree.Find(value.Key.GetHashCode());
+					BKeyIndexPair? pair = oBTree.Find(value.Key.GetHashCode());
 					if (pair != null)
 					{
 						throw new InvalidOperationException(string.Format("This collection already contains key '{0}'", value.Key));
@@ -249,7 +274,7 @@ namespace IRB.Collections.Generic
 		public void Add(BKeyValuePair<TKey, TValue> item)
 		{
 			int iKeyHash = item.Key.GetHashCode();
-			BKeyIndexPair pair = oBTree.Find(iKeyHash);
+			BKeyIndexPair? pair = oBTree.Find(iKeyHash);
 			if (pair != null)
 			{
 				this.aItems[pair.Index] = item;
@@ -269,7 +294,7 @@ namespace IRB.Collections.Generic
 
 		public bool Contains(BKeyValuePair<TKey, TValue> item)
 		{
-			BKeyIndexPair pair = oBTree.Find(item.Key.GetHashCode());
+			BKeyIndexPair? pair = oBTree.Find(item.Key.GetHashCode());
 			if (pair != null)
 			{
 				return true;
@@ -296,7 +321,7 @@ namespace IRB.Collections.Generic
 		public bool Remove(BKeyValuePair<TKey, TValue> item)
 		{
 			int iKeyHash = item.Key.GetHashCode();
-			BKeyIndexPair pair = oBTree.Find(iKeyHash);
+			BKeyIndexPair? pair = oBTree.Find(iKeyHash);
 			if (pair != null)
 			{
 				this.aItems.Remove(item);

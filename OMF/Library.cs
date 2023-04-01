@@ -12,17 +12,14 @@ namespace Disassembler.OMF
 		private List<CModule> aModules = new List<CModule>();
 
 		public Library(string path)
-			: this(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-		{ }
-
-		public Library(Stream stream)
 		{
+			FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
 			bool bLibraryHeader = false;
 			bool bLibraryEnd = false;
 			long lDictOffset = stream.Length;
 			int iDictBlockCount = 0;
 			int iTemp = 0;
-			StreamWriter oLog = new StreamWriter("log.txt");
+			StreamWriter oLog = new StreamWriter($"{Path.GetFileNameWithoutExtension(path)}.txt");
 
 			// read records
 			while (!bLibraryEnd && stream.Position < stream.Length && stream.Position < lDictOffset)

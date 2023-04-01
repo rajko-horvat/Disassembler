@@ -23,7 +23,7 @@ internal class Program
 
 		ParseDOSEXE(path);
 
-		//ParseWinEXE(path);
+		ParseWinEXE(path);
 	}
 
 	private static void DecodeDOSEXE(string path)
@@ -103,22 +103,10 @@ internal class Program
 		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\civ.exe");
 
 		Library oLibrary1 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\MLIBC7.lib");
-		/*Library oLibrary2 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\MLIBFP.lib");
-		Library oLibrary3 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\graphics.lib");
-		Library oLibrary4 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\em.lib");
-		Library oLibrary5 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\87.lib");*/
 
 		List<ModuleMatch> aMatches = new List<ModuleMatch>();
 		Console.WriteLine("Matching MLIBC7");
 		MatchLibraryToEXE(oLibrary1, mzEXE, aMatches);
-		/*Console.WriteLine("Matching MLIBFP");
-		MatchLibraryToEXE(oLibrary2, mzEXE, aMatches);
-		Console.WriteLine("Matching graphics");
-		MatchLibraryToEXE(oLibrary3, mzEXE, aMatches);
-		Console.WriteLine("Matching em");
-		MatchLibraryToEXE(oLibrary4, mzEXE, aMatches);
-		Console.WriteLine("Matching 87");
-		MatchLibraryToEXE(oLibrary5, mzEXE, aMatches);*/
 
 		Console.WriteLine("Finished DOS processing");
 	}
@@ -2368,9 +2356,6 @@ internal class Program
 
 	private static void MatchModule(CModule module, List<Segment> segments, List<ModuleMatch> matches)
 	{
-		if (module.Name.Equals("write", StringComparison.CurrentCultureIgnoreCase))
-			Console.Write("");
-
 		// iterate through data records that contain code
 		for (int i = 0; i < module.DataRecords.Count; i++)
 		{

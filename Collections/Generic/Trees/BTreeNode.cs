@@ -1,26 +1,48 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 
 namespace IRB.Collections.Generic.Trees
 {
 	/// <summary>
-	/// A BTree node
+	/// A BTreeNode class for the implementation of BTree algorithm
+	/// 
+	/// Authors:
+	/// 	Rajko Horvat (https://github.com/rajko-horvat)
+	/// 
+	/// License:
+	/// 	MIT
+	/// 	Copyright (c) 2011-2023, Ruđer Bošković Institute
+	///		
+	/// 	Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
+	/// 	and associated documentation files (the "Software"), to deal in the Software without restriction, 
+	/// 	including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+	/// 	and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, 
+	/// 	subject to the following conditions: 
+	/// 	The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+	/// 	The names of authors and contributors may not be used to endorse or promote Software products derived from this software 
+	/// 	without specific prior written permission.
+	/// 	
+	/// 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+	/// 	INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+	/// 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+	/// 	IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, 
+	/// 	DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+	/// 	ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	/// </summary>
 	public class BTreeNode : IDisposable
 	{
-		protected BTreeNode oParentNode = null;
-		private int iMaxCapacity;				// Minimum degree (defines the maximum capacity of this node)
-		private int iMinCapacity;				// A minimum keys this node can have
-		protected List<BKeyIndexPair> aKeys;	// An array of keys
-		protected List<BTreeNode> aChildNodes;	// An array of child nodes
+		protected BTreeNode? oParentNode = null;
+		private int iMaxCapacity;               // Minimum degree (defines the maximum capacity of this node)
+		private int iMinCapacity;               // A minimum keys this node can have
+		protected List<BKeyIndexPair> aKeys;    // An array of keys
+		protected List<BTreeNode> aChildNodes;  // An array of child nodes
 
 		public BTreeNode(int capacity)
 			: this(null, capacity)
 		{ }
 
-		public BTreeNode(BTreeNode parent, int capacity)
+		public BTreeNode(BTreeNode? parent, int capacity)
 		{
 			this.iMaxCapacity = capacity;
 			this.iMinCapacity = Math.Max((capacity / 2) - 1, 1);
@@ -35,6 +57,13 @@ namespace IRB.Collections.Generic.Trees
 
 		public void Dispose()
 		{
+			Clear();
+		}
+
+		#endregion
+
+		public void Clear()
+		{
 			if (!this.IsLeafNode)
 			{
 				BTreeNode child = this.aChildNodes[this.aChildNodes.Count - 1];
@@ -43,9 +72,8 @@ namespace IRB.Collections.Generic.Trees
 				{
 					if (child.IsLeafNode)
 					{
-						BTreeNode parent = child.Parent;
+						BTreeNode? parent = child.Parent;
 						child.Dispose();
-						child = null;
 
 						if (parent != null)
 						{
@@ -72,9 +100,7 @@ namespace IRB.Collections.Generic.Trees
 			this.aKeys.Clear();
 		}
 
-		#endregion
-
-		public BTreeNode Parent
+		public BTreeNode? Parent
 		{
 			get
 			{
@@ -82,7 +108,7 @@ namespace IRB.Collections.Generic.Trees
 			}
 		}
 
-		protected BTreeNode ParentProtected
+		protected BTreeNode? ParentProtected
 		{
 			get
 			{
@@ -180,7 +206,7 @@ namespace IRB.Collections.Generic.Trees
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public BTreeNode Search(int key)
+		public BTreeNode? Search(int key)
 		{
 			// Find the first key greater than or equal to key
 			int index = BinarySearchKey(key);
@@ -203,7 +229,7 @@ namespace IRB.Collections.Generic.Trees
 		/// </summary>
 		/// <param name="key"></param>
 		/// <returns></returns>
-		public BKeyIndexPair Find(int key)
+		public BKeyIndexPair? Find(int key)
 		{
 			// Find the first key greater than or equal to key
 			int index = BinarySearchKey(key);
@@ -383,7 +409,7 @@ namespace IRB.Collections.Generic.Trees
 					oChild.aKeys.RemoveAt(0);
 					if (oChild.aKeys.Count < oChild.iMinCapacity)
 					{
-						oChild.oParentNode.RebalanceChildren();
+						oChild.oParentNode?.RebalanceChildren();
 					}
 				}
 			}
@@ -420,9 +446,9 @@ namespace IRB.Collections.Generic.Trees
 					//writer.Flush();
 
 					// handle three cases: right borrow, left borrow or merge
-					BTreeNode right = bRight ? this.aChildNodes[i + 1] : null;
-					BTreeNode left = bLeft ? this.aChildNodes[i - 1] : null;
-					if (bRight && right.IsLeafNode && right.aKeys.Count - 1 >= right.iMinCapacity)
+					BTreeNode? right = bRight ? this.aChildNodes[i + 1] : null;
+					BTreeNode? left = bLeft ? this.aChildNodes[i - 1] : null;
+					if (bRight && right != null && right.IsLeafNode && right.aKeys.Count - 1 >= right.iMinCapacity)
 					{
 						// right sibling is a leaf node and we can borrow one element
 						//writer.WriteLine("Borrowing one key from right leaf child");
@@ -431,7 +457,7 @@ namespace IRB.Collections.Generic.Trees
 						this.aKeys[i] = right.aKeys[0];
 						right.aKeys.RemoveAt(0);
 					}
-					else if (bRight && right.IsLeafNode && (child.aKeys.Count + right.aKeys.Count + 1) < child.iMaxCapacity)
+					else if (bRight && right != null && right.IsLeafNode && (child.aKeys.Count + right.aKeys.Count + 1) < child.iMaxCapacity)
 					{
 						// merge child with right sibling
 						//writer.WriteLine("Merging with right leaf child");
@@ -444,7 +470,7 @@ namespace IRB.Collections.Generic.Trees
 
 						right.Dispose();
 					}
-					else if (bRight && !right.IsLeafNode)
+					else if (bRight && right != null && !right.IsLeafNode)
 					{
 						// just borrow from right children and invoke leaf parent RebalanceChildren procedure if needed
 						//writer.WriteLine("Borrowing from right node");
@@ -459,10 +485,10 @@ namespace IRB.Collections.Generic.Trees
 						oBorrowChild.aKeys.RemoveAt(0);
 						if (oBorrowChild.aKeys.Count < oBorrowChild.iMinCapacity)
 						{
-							oBorrowChild.oParentNode.RebalanceChildren();
+							oBorrowChild.oParentNode?.RebalanceChildren();
 						}
 					}
-					else if (bLeft && left.IsLeafNode && left.aKeys.Count - 1 >= left.iMinCapacity)
+					else if (bLeft && left != null && left.IsLeafNode && left.aKeys.Count - 1 >= left.iMinCapacity)
 					{
 						// left sibling is a leaf node and we can borrow one element
 						//writer.WriteLine("Borrowing one key from left leaf child");
@@ -471,7 +497,7 @@ namespace IRB.Collections.Generic.Trees
 						this.aKeys[i - 1] = left.aKeys[left.aKeys.Count - 1];
 						left.aKeys.RemoveAt(left.aKeys.Count - 1);
 					}
-					else if (bLeft && left.IsLeafNode && (left.aKeys.Count + child.aKeys.Count + 1) < left.iMaxCapacity)
+					else if (bLeft && left != null && left.IsLeafNode && (left.aKeys.Count + child.aKeys.Count + 1) < left.iMaxCapacity)
 					{
 						// delete child and add key to a left sibling
 						//writer.WriteLine("Merging with left leaf child");
@@ -484,7 +510,7 @@ namespace IRB.Collections.Generic.Trees
 
 						child.Dispose();
 					}
-					else if (bLeft && !left.IsLeafNode)
+					else if (bLeft && left != null && !left.IsLeafNode)
 					{
 						// just borrow from left children and invoke leaf parent RebalanceChildren procedure if needed
 						//writer.WriteLine("Borrowing from left node");
@@ -499,7 +525,7 @@ namespace IRB.Collections.Generic.Trees
 						oBorrowChild.aKeys.RemoveAt(oBorrowChild.aKeys.Count - 1);
 						if (oBorrowChild.aKeys.Count < oBorrowChild.iMinCapacity)
 						{
-							oBorrowChild.oParentNode.RebalanceChildren();
+							oBorrowChild.oParentNode?.RebalanceChildren();
 						}
 					}
 					else
@@ -516,7 +542,7 @@ namespace IRB.Collections.Generic.Trees
 				// When we delete children, at some point this node will contain less than iMinCapacity keys
 				// but, we will not rebalance non-leaf node as this would be way too complicated
 				// so, leave things as they are until we run out of keys, and then this node will become leaf node.
-				
+
 				// Sanity check, just to make sure everything is OK.
 				if (this.aChildNodes.Count == 1 && this.aChildNodes[0].IsLeafNode)
 				{

@@ -14,7 +14,6 @@ namespace Disassembler.OMF
 		private List<PublicNameDefinition> aLocalPublicNames = new List<PublicNameDefinition>();
 		private List<DataRecord> aDataRecords = new List<DataRecord>();
 		private List<ExternalNameDefinition> aExternalNames = new List<ExternalNameDefinition>();
-		private List<ExternalNameDefinition> aLocalExternalNames = new List<ExternalNameDefinition>();
 
 		public CModule(string path)
 			: this(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read), new StreamWriter("moduleLog.txt"))
@@ -23,12 +22,11 @@ namespace Disassembler.OMF
 		public CModule(Stream stream, StreamWriter log)
         {
             bool bModuleEnd = false;
-            string sTemp = null;
 			List<string> aNameList = new List<string>();
-			SegmentDefinition segDef = null;
-			SegmentGroupDefinition segGrp = null;
-			PublicNameDefinition pubDef = null;
-			DataRecord dataRec = null;
+			SegmentDefinition segDef;
+			SegmentGroupDefinition segGrp;
+			PublicNameDefinition pubDef;
+			DataRecord dataRec;
 			List<Fixup> aFixups;
 			int iCount;
 
@@ -48,16 +46,17 @@ namespace Disassembler.OMF
                         break;                    
                     case 0x88:
                         // COMENT Comment Record (Including all comment class extensions)
-                        log.Write("COMENT - Comment Record (0x{0:x2}) (", bType);
+                        log.WriteLine("COMENT - Comment Record (0x{0:x2})", bType);
 						// we can safely ignore those as they are completely uninformative
-						oRecord.Position = 0;
+
+						/*oRecord.Position = 0;
 						for (int i = 0; i < oRecord.Length; i++)
 						{
 							if (i > 0)
 								log.Write(", ");
 							log.Write("0x{0:x2}", ReadByte(oRecord));
 						}
-						log.WriteLine(")");
+						log.WriteLine(")");*/
                         break;
                     case 0x8A:
                         // MODEND Module End Record
@@ -97,14 +96,9 @@ namespace Disassembler.OMF
 						}
 						log.WriteLine(")");
                         break;
-                    case 0x94:
-                        // LINNUM Line Numbers Record
-                        log.WriteLine("LINNUM - Line Numbers Record (0x{0:x2}), Ignored", bType);
-                        break;
                     case 0x96:
                         // LNAMES List of Names Record
                         log.Write("LNAMES - List of Names Record (0x{0:x2})", bType);
-						//aNames.Clear();
 						while (oRecord.Position < oRecord.Length - 1)
 						{
 							string sTemp1 = ReadString(oRecord);
@@ -139,7 +133,6 @@ namespace Disassembler.OMF
                         break;
                     case 0x9C:
                         // FIXUPP Fixup Record
-						// unclear in the specification, had to do analysis
                         log.Write("FIXUPP - Fixup Record (0x{0:x2})", bType);
 						log.Write(" {");
 						/*oRecord.Position = 0;
@@ -163,9 +156,6 @@ namespace Disassembler.OMF
 							aFixups.Add(new Fixup(oRecord));
 							//iFixCount++;
 						}
-
-						// sort ascending by offset
-						//this.aFixups.Sort(Fixup.CompareByOffset);
 
 						log.WriteLine("[");
 						for (int i = 0; i < aFixups.Count; i++)
@@ -252,11 +242,19 @@ namespace Disassembler.OMF
                     case 0xB0:
                         // COMDEF Communal Names Definition Record
                         log.WriteLine("COMDEF - Communal Names Definition Record (0x{0:x2}), Ignored", bType);
-                        break;
-                    case 0xB2:
-                        // BAKPAT Backpatch Record
-                        log.WriteLine("BAKPAT - Backpatch Record (0x{0:x2}), Ignored", bType);
-                        break;
+						// deprecated, ignore those
+						/*oRecord.Position = 0;
+						for (int i = 0; i < oRecord.Length; i++)
+						{
+							if (i > 0)
+								log.Write(", ");
+							byte byt = ReadByte(oRecord);
+							log.Write("0x{0:x2}", byt);
+							if (byt >= 0x20)
+								log.Write($"'{(char)byt}'");
+						}
+						log.WriteLine(")");*/
+						break;
                     case 0xB4:
 					case 0xB5:
                         // LEXTDEF Local External Names Definition Record
@@ -265,7 +263,7 @@ namespace Disassembler.OMF
 						while (oRecord.Position < oRecord.Length - 1)
 						{
 							ExternalNameDefinition extDef = new ExternalNameDefinition(oRecord);
-							this.aLocalExternalNames.Add(extDef);
+							this.aExternalNames.Add(extDef);
 							if (iCount > 0)
 								log.Write(", ");
 							log.Write("'{0}'(0x{1:x2})", extDef.Name, extDef.TypeIndex);
@@ -291,51 +289,18 @@ namespace Disassembler.OMF
 						}
 						log.WriteLine(")");
                         break;
-                    case 0xB8:
-                        // LCOMDEF Local Communal Names Definition Record
-                        log.WriteLine("LCOMDEF - Local Communal Names Definition Record (0x{0:x2}), Ignored", bType);
-                        break;
-                    case 0xBC:
-                        // CEXTDEF COMDAT External Names Definition Record
-                        log.WriteLine("CEXTDEF - External Names Definition Record (0x{0:x2}), Ignored", bType);
-                        break;
-                    case 0xC2:
-                    case 0xC3:
-                        // COMDAT Initialized Communal Data Record
-                        log.WriteLine("COMDAT - Initialized Communal Data Record (0x{0:x2}), Ignored", bType);
-                        break;
-                    case 0xC4:
-                    case 0xC5:
-                        // LINSYM Symbol Line Numbers Record
-                        log.WriteLine("LINSYM - Symbol Line Numbers Record (0x{0:x2}), Ignored", bType);
-                        break;
-                    case 0xC6:
-                        // ALIAS Alias Definition Record
-                        log.WriteLine("ALIAS - Alias Definition Record (0x{0:x2}), Ignored", bType);
-                        break;
-                    case 0xC8:
-                    case 0xC9:
-                        // NBKPAT Named Backpatc Record
-                        log.WriteLine("NBKPAT - Named Backpatc Record (0x{0:x2}), Ignored", bType);
-                        break;
-                    case 0xCA:
-                        // LLNAMES Local Logical Names Definition Record
-                        log.WriteLine("LLNAMES - Local Logical Names Definition Record (0x{0:x2}), Ignored", bType);
-                        break;
-                    case 0xCC:
-                        // VERNUM OMF Version Number Record
-                        log.WriteLine("VERNUM - OMF Version Number Record (0x{0:x2}), Ignored", bType);
-                        break;
-                    case 0xCE:
-                        // VENDEXT Vendor-specific OMF Extension Record
-                        log.WriteLine("VENDEXT - Vendor-specific OMF Extension Record (0x{0:x2}), Ignored", bType);
-                        break;
                     default:
                         throw new Exception("Unknown Record type");
                 }
                 log.Flush();
             }
-        }
+
+			// sort fixups by data offset
+			for (int i = 0; i < this.aDataRecords.Count; i++)
+			{
+				this.aDataRecords[i].Fixups.Sort(Fixup.CompareByOffset);
+			}
+		}
 
 		public static byte ReadByte(Stream stream)
         {
@@ -486,14 +451,6 @@ namespace Disassembler.OMF
 			get
 			{
 				return this.aExternalNames;
-			}
-		}
-
-		public List<ExternalNameDefinition> LocalExternalNames
-		{
-			get
-			{
-				return this.aLocalExternalNames;
 			}
 		}
 	}

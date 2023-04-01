@@ -27,7 +27,7 @@ namespace Disassembler.OMF
 
 	public enum FrameMethodEnum
 	{
-		Undefined=-1,
+		Undefined = -1,
 		SegDefIndex = 0,
 		GrpDefIndex = 1,
 		ExtDefIndex = 2,
@@ -80,7 +80,7 @@ namespace Disassembler.OMF
 		private int iDataOffset = 0;
 		private int iFrameThreadIndex = -1;
 		private int iTargetThreadIndex = -1;
-		private int iTargetDisplacement = -1;
+		private int iTargetDisplacement = 0;
 
 		public Fixup(Stream stream)
 		{
@@ -210,7 +210,6 @@ namespace Disassembler.OMF
 
 					default:
 						return LocationTypeEnum.Undefined;
-						return LocationTypeEnum.Undefined;
 				}
 			}
 		}
@@ -266,6 +265,41 @@ namespace Disassembler.OMF
 			get
 			{
 				return this.iTargetDisplacement;
+			}
+		}
+
+		public static int CompareByOffset(Fixup item1, Fixup item2)
+		{
+			if (item1 == null)
+			{
+				if (item2 == null)
+				{
+					// If x is null and y is null, they're
+					// equal.
+					return 0;
+				}
+				// If x is null and y is not null, y
+				// is greater.
+				return -1;
+			}
+			else
+			{
+				// If x is not null...
+				if (item2 == null)
+				// ...and y is null, x is greater.
+				{
+					return 1;
+				}
+				else
+				{
+					if (item1.DataOffset == item2.DataOffset)
+						return 0;
+
+					if (item1.DataOffset < item2.DataOffset)
+						return -1;
+
+					return 1;
+				}
 			}
 		}
 	}
