@@ -12,7 +12,7 @@ namespace Disassembler.OMF
 
 		public LogicalData(Stream stream, List<SegmentDefinition> segments)
 		{
-			int iSegment = CModule.ReadByte(stream);
+			int iSegment = OBJModule.ReadByte(stream);
 			if (iSegment == 0)
 			{
 				throw new Exception("Logical Enumerated Data Record must have segment");
@@ -22,8 +22,8 @@ namespace Disassembler.OMF
 				this.oSegment = segments[iSegment - 1];
 			}
 
-			this.iOffset = CModule.ReadUInt16(stream);
-			this.aData = CModule.ReadBlock(stream, (int)(stream.Length - stream.Position - 1));
+			this.iOffset = OBJModule.ReadUInt16(stream);
+			this.aData = OBJModule.ReadBlock(stream, (int)(stream.Length - stream.Position - 1));
 		}
 
 		public SegmentDefinition Segment

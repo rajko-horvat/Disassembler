@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Disassembler.CPU;
+using Disassembler.NE;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -8,7 +10,9 @@ namespace Disassembler
 	public partial class Instruction
 	{
 		// location of a instruction
-		private MemoryLocation oLocation = new MemoryLocation(0);
+		private uint uiLinearAddress = 0;
+		private ushort usSegment = 0;
+		private ushort usOffset = 0;
 
 		private CPUEnum eCPUType = CPUEnum.Undefined;
 		private InstructionEnum eInstruction = InstructionEnum.Undefined;
@@ -41,10 +45,28 @@ namespace Disassembler
 		private FlagsEnum eModifiedFlags = FlagsEnum.Undefined;
 		private FlagsEnum eUndefinedFlags = FlagsEnum.Undefined;
 
-		public Instruction(uint segment, uint offset, MemoryStream stream)
+		public Instruction(ushort segment, ushort offset, InstructionEnum instructiontype, InstructionSizeEnum size)
 		{
-			this.oLocation = new MemoryLocation(segment, offset);
+			this.uiLinearAddress = MemoryRegion.ToLinearAddress(segment, offset);
+			this.usSegment = segment;
+			this.usOffset = offset;
+			this.eInstruction = instructiontype;
+			this.eDefaultSize = size;
+			this.eOperandSize = size;
+			this.eAddressSize = size;
+		}
 
+		public Instruction(ushort segment, ushort offset, MemoryStream stream)
+		{
+			this.uiLinearAddress = MemoryRegion.ToLinearAddress(segment, offset);
+			this.usSegment = segment;
+			this.usOffset = offset;
+
+			DecodeInstruction(stream);
+		}
+
+		public void DecodeInstruction(MemoryStream stream)
+		{
 			Decode(stream);
 
 			// check for REP prefix validity
@@ -81,11 +103,24 @@ namespace Disassembler
 			}
 		}
 
-		public MemoryLocation Location
+		public uint LinearAddress
+		{
+			get { return this.uiLinearAddress; }
+		}
+
+		public ushort Segment
 		{
 			get
 			{
-				return this.oLocation;
+				return this.usSegment;
+			}
+		}
+
+		public ushort Offset
+		{
+			get
+			{
+				return this.usOffset;
 			}
 		}
 
@@ -129,6 +164,22 @@ namespace Disassembler
 					return string.Format("rDS");
 				default:
 					return string.Format("this.oParent.CPU.{0}", this.eDefaultDataSegment.ToString());
+			}
+		}
+
+		public string GetDefaultDataSegmentTextMZ()
+		{
+			switch (this.eDefaultDataSegment)
+			{
+				case SegmentRegisterEnum.Immediate:
+					return "--";
+				case SegmentRegisterEnum.ES:
+				case SegmentRegisterEnum.DS:
+					return string.Format("this.oCPU.{0}", this.eDefaultDataSegment.ToString());
+				case SegmentRegisterEnum.Undefined:
+					return string.Format("this.oCPU.DS");
+				default:
+					return string.Format("this.oCPU.{0}", this.eDefaultDataSegment.ToString());
 			}
 		}
 
@@ -1012,7 +1063,7 @@ namespace Disassembler
 					sbValue.AppendFormat("ToDword({0}, {1})", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
 				case InstructionEnum.CallFunction:
-					sbValue.AppendFormat("F{0}_{1:x}(...)", this.aParameters[0].SegmentAddress, this.aParameters[0].Value);
+					sbValue.AppendFormat("F{0}_{1:x}(...)", this.aParameters[0].Segment, this.aParameters[0].Value);
 					break;
 				default:
 					sbValue.Append("[Unknown instruction]");
@@ -1039,7 +1090,7 @@ namespace Disassembler
 
 		public static int CompareInstructionByAddress(Instruction i1, Instruction i2)
 		{
-			return i1.Location.LinearAddress.CompareTo(i2.Location.LinearAddress);
+			return i1.LinearAddress.CompareTo(i2.LinearAddress);
 		}
 	}
 }

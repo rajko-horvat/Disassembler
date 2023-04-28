@@ -31,10 +31,10 @@ namespace Disassembler.CPU
 
 		public bool HasAccess(ushort segment, ushort offset, MemoryFlagsEnum access)
 		{
-			return this.HasAccess(MemoryRegion.ToAbsolute(segment, offset), access);
+			return this.HasAccess(MemoryRegion.ToLinearAddress(segment, offset), access);
 		}
 
-		public bool HasAccess(int address, MemoryFlagsEnum access)
+		public bool HasAccess(uint address, MemoryFlagsEnum access)
 		{
 			for (int i = 0; i < this.aMemoryRegions.Count; i++)
 			{
@@ -52,10 +52,10 @@ namespace Disassembler.CPU
 
 		public byte ReadByte(ushort segment, ushort offset)
 		{
-			return this.ReadByte(MemoryRegion.ToAbsolute(segment, offset));
+			return this.ReadByte(MemoryRegion.ToLinearAddress(segment, offset));
 		}
 
-		public byte ReadByte(int address)
+		public byte ReadByte(uint address)
 		{
 			if (this.HasAccess(address, MemoryFlagsEnum.Read))
 			{
@@ -77,10 +77,10 @@ namespace Disassembler.CPU
 
 		public ushort ReadWord(ushort segment, ushort offset)
 		{
-			return this.ReadWord(MemoryRegion.ToAbsolute(segment, offset));
+			return this.ReadWord(MemoryRegion.ToLinearAddress(segment, offset));
 		}
 
-		public ushort ReadWord(int address)
+		public ushort ReadWord(uint address)
 		{
 			if (this.HasAccess(address, MemoryFlagsEnum.Read))
 			{
@@ -102,10 +102,10 @@ namespace Disassembler.CPU
 
 		public void WriteByte(ushort segment, ushort offset, byte value)
 		{
-			this.WriteByte(MemoryRegion.ToAbsolute(segment, offset), value);
+			this.WriteByte(MemoryRegion.ToLinearAddress(segment, offset), value);
 		}
 
-		public void WriteByte(int address, byte value)
+		public void WriteByte(uint address, byte value)
 		{
 			if (this.HasAccess(address, MemoryFlagsEnum.Write))
 			{
@@ -130,10 +130,10 @@ namespace Disassembler.CPU
 
 		public void WriteWord(ushort segment, ushort offset, ushort value)
 		{
-			this.WriteWord(MemoryRegion.ToAbsolute(segment, offset), value);
+			this.WriteWord(MemoryRegion.ToLinearAddress(segment, offset), value);
 		}
 
-		public void WriteWord(int address, ushort value)
+		public void WriteWord(uint address, ushort value)
 		{
 			if (this.HasAccess(address, MemoryFlagsEnum.Write))
 			{
@@ -158,30 +158,30 @@ namespace Disassembler.CPU
 
 		public void WriteBlock(ushort segment, ushort offset, byte[] srcData, int pos, int length)
 		{
-			WriteBlock(MemoryRegion.ToAbsolute(segment, offset), srcData, pos, length);
+			WriteBlock(MemoryRegion.ToLinearAddress(segment, offset), srcData, pos, length);
 		}
 
-		public void WriteBlock(int address, byte[] srcData, int pos, int length) 
+		public void WriteBlock(uint address, byte[] srcData, int pos, int length) 
 		{
 			for (int i = 0; i < length; i++)
 			{
-				WriteByte(address + i, srcData[pos + i]);
+				WriteByte((uint)(address + i), srcData[pos + i]);
 			}
 		}
 
 		public bool ResizeBlock(ushort segment, ushort para)
 		{
-			int iAddress = MemoryRegion.ToAbsolute(segment, 0);
+			uint uiAddress = MemoryRegion.ToLinearAddress(segment, 0);
 			int iSize = (int)para << 4;
 
 			for (int i = 0; i < this.aBlocks.Count; i++)
 			{
-				if (this.aBlocks[i].Region.Start == iAddress)
+				if (this.aBlocks[i].Region.Start == uiAddress)
 				{
 					// check for overlapping
 					for (int j = 0; j < this.aBlocks.Count; j++)
 					{
-						if (j != i && this.aBlocks[j].Region.CheckOverlap(iAddress, iSize))
+						if (j != i && this.aBlocks[j].Region.CheckOverlap(uiAddress, iSize))
 							return false;
 					}
 
@@ -196,31 +196,31 @@ namespace Disassembler.CPU
 
 		public bool AllocateBlock(int size, out ushort segment)
 		{
-			int iFreeMin = 0;
-			int iFreeMax = 0xb0000;
+			uint uiFreeMin = 0;
+			uint uiFreeMax = 0xb0000;
 
 			// just allocate next available block, don't search between blocks for now
 			for (int i = 0; i < this.aBlocks.Count; i++)
 			{
-				if (this.aBlocks[i].Region.End >= iFreeMin)
+				if (this.aBlocks[i].Region.End >= uiFreeMin)
 				{
-					iFreeMin = this.aBlocks[i].Region.End + 1;
+					uiFreeMin = this.aBlocks[i].Region.End + 1;
 				}
 			}
 
 			// make sure that iFreeMin is 16 byte aligned
-			MemoryRegion.AlignBlock(ref iFreeMin);
+			MemoryRegion.AlignBlock(ref uiFreeMin);
 
 			// is there enough room for allocation
-			if (iFreeMax - iFreeMin < size)
+			if (uiFreeMax - uiFreeMin < size)
 			{
-				segment = (ushort)(((iFreeMax - iFreeMin) >> 4) & 0xffff);
+				segment = (ushort)(((uiFreeMax - uiFreeMin) >> 4) & 0xffff);
 				return false;
 			}
 
 			// allocate block
-			segment = (ushort)((iFreeMin >> 4) & 0xffff);
-			MemoryBlock mem = new MemoryBlock(iFreeMin, size);
+			segment = (ushort)((uiFreeMin >> 4) & 0xffff);
+			MemoryBlock mem = new MemoryBlock(uiFreeMin, size);
 			this.aBlocks.Add(mem);
 
 			return true;
@@ -229,31 +229,31 @@ namespace Disassembler.CPU
 		public bool AllocateParagraphs(ushort size, out ushort segment)
 		{
 			int iSize = (int)size << 4;
-			int iFreeMin = 0;
-			int iFreeMax = 0xb0000;
+			uint uiFreeMin = 0;
+			uint uiFreeMax = 0xb0000;
 
 			// just allocate next available block, don't search between blocks for now
 			for (int i = 0; i < this.aBlocks.Count; i++)
 			{
-				if (this.aBlocks[i].Region.End >= iFreeMin)
+				if (this.aBlocks[i].Region.End >= uiFreeMin)
 				{
-					iFreeMin = this.aBlocks[i].Region.End + 1;
+					uiFreeMin = this.aBlocks[i].Region.End + 1;
 				}
 			}
 
 			// make sure that iFreeMin is 16 byte aligned
-			MemoryRegion.AlignBlock(ref iFreeMin);
+			MemoryRegion.AlignBlock(ref uiFreeMin);
 
 			// is enough room for allocation
-			if (iFreeMax - iFreeMin < iSize)
+			if (uiFreeMax - uiFreeMin < iSize)
 			{
-				segment = (ushort)(((iFreeMax - iFreeMin) >> 4) & 0xffff);
+				segment = (ushort)(((uiFreeMax - uiFreeMin) >> 4) & 0xffff);
 				return false;
 			}
 
 			// allocate block
-			segment = (ushort)((iFreeMin >> 4) & 0xffff);
-			MemoryBlock mem = new MemoryBlock(iFreeMin, iSize);
+			segment = (ushort)((uiFreeMin >> 4) & 0xffff);
+			MemoryBlock mem = new MemoryBlock(uiFreeMin, iSize);
 			this.aBlocks.Add(mem);
 
 			return true;
@@ -261,11 +261,11 @@ namespace Disassembler.CPU
 
 		public bool FreeBlock(ushort segment)
 		{
-			int iAddress = MemoryRegion.ToAbsolute(segment, 0);
+			uint uiAddress = MemoryRegion.ToLinearAddress(segment, 0);
 
 			for (int i = 0; i < this.aBlocks.Count; i++)
 			{
-				if (this.aBlocks[i].Region.Start == iAddress)
+				if (this.aBlocks[i].Region.Start == uiAddress)
 				{
 					// found the block
 					this.aBlocks.RemoveAt(i);

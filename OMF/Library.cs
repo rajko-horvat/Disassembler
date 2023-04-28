@@ -9,7 +9,7 @@ namespace Disassembler.OMF
 	{
 		private int iPageSize = 16;
 		private bool bCaseSensitive = false;
-		private List<CModule> aModules = new List<CModule>();
+		private List<OBJModule> aModules = new List<OBJModule>();
 
 		public Library(string path)
 		{
@@ -35,7 +35,7 @@ namespace Disassembler.OMF
 							throw new Exception("Not an OMF library file");
 						}
 						stream.Seek(-1, SeekOrigin.Current);
-						CModule oModule = new CModule(stream, oLog);
+						OBJModule oModule = new OBJModule(stream, oLog);
 						this.aModules.Add(oModule);
 						AlignToPage(stream);
 						oLog.WriteLine();
@@ -169,7 +169,7 @@ namespace Disassembler.OMF
 			}
 		}
 
-		public List<CModule> Modules
+		public List<OBJModule> Modules
 		{
 			get
 			{

@@ -1,57 +1,60 @@
 ﻿using Disassembler.CPU;
-using Disassembler.NE;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Disassembler.MZ
 {
 	public struct MZRelocationItem
 	{
-		private int iSegment;
-		private int iOffset;
+		private ushort usSegment;
+		private ushort usOffset;
 
-		public MZRelocationItem(int segment, int offset)
+		public MZRelocationItem(ushort segment, ushort offset)
 		{
-			this.iSegment = segment;
-			this.iOffset = offset;
+			this.usSegment = segment;
+			this.usOffset = offset;
 		}
 
-		public int Segment
+		public ushort Segment
 		{
-			get { return iSegment; }
+			get { return this.usSegment; }
 		}
 
-		public int Offset
+		public ushort Offset
 		{
-			get { return iOffset; }
+			get { return this.usOffset; }
+		}
+
+		public override string ToString()
+		{
+			return $"0x{this.usSegment:x4}:0x{this.usOffset:x4}";
 		}
 	}
 
 	public class MZExecutable
 	{
 		// 0x00 - Signature, word (0x5A4D (ASCII for 'M' and 'Z'))
-		protected int iSignature = -1;
+		protected ushort usSignature = 0;
 		// 0x0A - Minimum allocation, word (The number of paragraphs required by the program, excluding the PSP and program image. If no free block is big enough, the loading stops.)
-		protected int iMinimumAllocation = -1;
+		protected ushort usMinimumAllocation = 0;
 		// 0x0C - Maximum allocation, word (The number of paragraphs requested by the program. If no free block is big enough, the biggest one possible is allocated.)
-		protected int iMaximumAllocation = -1;
+		protected ushort usMaximumAllocation = 0;
 		// 0x0E - Initial SS, word (Relocatable segment address for SS.)
-		protected int iInitialSS = -1;
+		protected ushort usInitialSS = 0;
 		// 0x10 - Initial SP, word (Initial value for SP.)
-		protected int iInitialSP = -1;
+		protected ushort usInitialSP = 0;
 		// 0x14 - Initial IP, word (Initial value for IP.)
-		protected int iInitialIP = -1;
+		protected ushort usInitialIP = 0;
 		// 0x16 - Initial CS, word (Relocatable segment address for CS.)
-		protected int iInitialCS = -1;
+		protected ushort usInitialCS = 0;
 		// 0x1A - Overlay, word (Value used for overlay management. If zero, this is the main executable.)
-		protected int iOverlayIndex = -1;
+		protected ushort usOverlayIndex = 0;
 		// 0x1C - Overlay information, word (Files sometimes contain extra information for the main's program overlay management.)
 		// always 1 in thiscase
-		protected int iOverlayID = -1;
+		protected ushort usOverlayID = 0;
 		// actual code or data
 		protected byte[] aData = new byte[0];
 		// relocation data
@@ -85,8 +88,8 @@ namespace Disassembler.MZ
 		private static int ReadHeader(Stream stream, int position, MZExecutable exe)
 		{
 			// load header
-			exe.iSignature = ReadUInt16(stream);
-			if (exe.iSignature != 0x5a4d)
+			exe.usSignature = ReadUInt16(stream);
+			if (exe.usSignature != 0x5a4d)
 			{
 				throw new Exception("Not an MS-DOS executable file");
 			}
@@ -99,18 +102,18 @@ namespace Disassembler.MZ
 			int iRelocationItems = ReadUInt16(stream);
 			// 0x08 - Header size, word (The number of paragraphs taken up by the header. It can be any value, as the loader just uses it to find where the actual executable data starts. It may be larger than what the "standard" fields take up, and you may use it if you want to include your own header metadata, or put the relocation table there, or use it for any other purpose.)
 			int iHeaderSize = ReadUInt16(stream);
-			exe.iMinimumAllocation = ReadUInt16(stream);
-			exe.iMaximumAllocation = ReadUInt16(stream);
-			exe.iInitialSS = ReadUInt16(stream);
-			exe.iInitialSP = ReadUInt16(stream);
+			exe.usMinimumAllocation = ReadUInt16(stream);
+			exe.usMaximumAllocation = ReadUInt16(stream);
+			exe.usInitialSS = ReadUInt16(stream);
+			exe.usInitialSP = ReadUInt16(stream);
 			// 0x12 - Checksum, word (When added to the sum of all other words in the file, the result should be zero.)
 			int iChecksum = ReadUInt16(stream);
-			exe.iInitialIP = ReadUInt16(stream);
-			exe.iInitialCS = ReadUInt16(stream);
+			exe.usInitialIP = ReadUInt16(stream);
+			exe.usInitialCS = ReadUInt16(stream);
 			// 0x18 - Relocation table, word (The (absolute) offset to the relocation table.)
 			int iRelocationTableOffset = ReadUInt16(stream);
-			exe.iOverlayIndex = ReadUInt16(stream);
-			exe.iOverlayID = ReadUInt16(stream);
+			exe.usOverlayIndex = ReadUInt16(stream);
+			exe.usOverlayID = ReadUInt16(stream);
 
 			// read relocations
 			if (iRelocationItems > 0)
@@ -118,9 +121,9 @@ namespace Disassembler.MZ
 				stream.Seek(position + iRelocationTableOffset, SeekOrigin.Begin);
 				for (int i = 0; i < iRelocationItems; i++)
 				{
-					int iOffset = ReadUInt16(stream);
-					int iSegment = ReadUInt16(stream);
-					exe.aRelocations.Add(new MZRelocationItem(iSegment, iOffset));
+					ushort usOffset = ReadUInt16(stream);
+					ushort usSegment = ReadUInt16(stream);
+					exe.aRelocations.Add(new MZRelocationItem(usSegment, usOffset));
 				}
 
 				stream.Seek(position + iHeaderSize << 4, SeekOrigin.Begin);
@@ -146,31 +149,31 @@ namespace Disassembler.MZ
 		public void WriteToFile(Stream stream)
 		{
 			MemoryStream writer = new MemoryStream();
-			WriteUInt16(writer, this.iSignature);
-			int iLength = this.aData.Length;
-			int iHeaderSize = 0x1e + this.aRelocations.Count * 4;
-			MemoryRegion.AlignBlock(ref iHeaderSize);
-			iLength += iHeaderSize;
-			int iPages = iLength / 512;
-			int iExtraBytes = iLength - (iPages * 512);
-			if (iExtraBytes > 0)
-				iPages++;
-			WriteUInt16(writer, iExtraBytes);
-			WriteUInt16(writer, iPages);
-			WriteUInt16(writer, this.aRelocations.Count);
-			iHeaderSize >>= 4;
-			WriteUInt16(writer, iHeaderSize);
-			WriteUInt16(writer, this.iMinimumAllocation);
-			WriteUInt16(writer, this.iMaximumAllocation);
-			WriteUInt16(writer, this.iInitialSS);
-			WriteUInt16(writer, this.iInitialSP);
-			int iChecksum = 0;
-			WriteUInt16(writer, iChecksum);
-			WriteUInt16(writer, this.iInitialIP);
-			WriteUInt16(writer, this.iInitialCS);
+			WriteUInt16(writer, this.usSignature);
+			uint uiLength = (uint)this.aData.Length;
+			uint uiHeaderSize = (uint)(0x1e + this.aRelocations.Count * 4);
+			MemoryRegion.AlignBlock(ref uiHeaderSize);
+			uiLength += uiHeaderSize;
+			uint uiPages = uiLength / 512;
+			uint uiExtraBytes = uiLength - (uiPages * 512);
+			if (uiExtraBytes > 0)
+				uiPages++;
+			WriteUInt16(writer, uiExtraBytes);
+			WriteUInt16(writer, uiPages);
+			WriteUInt16(writer, (uint)this.aRelocations.Count);
+			uiHeaderSize >>= 4;
+			WriteUInt16(writer, uiHeaderSize);
+			WriteUInt16(writer, this.usMinimumAllocation);
+			WriteUInt16(writer, this.usMaximumAllocation);
+			WriteUInt16(writer, this.usInitialSS);
+			WriteUInt16(writer, this.usInitialSP);
+			uint uiChecksum = 0;
+			WriteUInt16(writer, uiChecksum);
+			WriteUInt16(writer, this.usInitialIP);
+			WriteUInt16(writer, this.usInitialCS);
 			WriteUInt16(writer, 0x1e);
-			WriteUInt16(writer, this.iOverlayIndex);
-			WriteUInt16(writer, this.iOverlayID);
+			WriteUInt16(writer, this.usOverlayIndex);
+			WriteUInt16(writer, this.usOverlayID);
 
 			// write relocations
 			for (int i = 0; i < this.aRelocations.Count; i++)
@@ -181,8 +184,8 @@ namespace Disassembler.MZ
 			}
 
 			// append to 16 byte boundary
-			int iAppend = (int)((iHeaderSize << 4) - (0x1e + this.aRelocations.Count * 4));
-			for (int i = 0; i < iAppend; i++)
+			uint uiAppend = (uint)((uiHeaderSize << 4) - (0x1e + this.aRelocations.Count * 4));
+			for (int i = 0; i < uiAppend; i++)
 			{
 				writer.WriteByte(0);
 			}
@@ -191,8 +194,8 @@ namespace Disassembler.MZ
 			writer.Write(this.aData, 0, this.aData.Length);
 
 			// append to full 512 byte page
-			iAppend = 512 - iExtraBytes;
-			for (int i = 0; i < iAppend; i++)
+			uiAppend = 512 - uiExtraBytes;
+			for (int i = 0; i < uiAppend; i++)
 			{
 				writer.WriteByte(0);
 			}
@@ -203,12 +206,12 @@ namespace Disassembler.MZ
 			writer.Seek(0, SeekOrigin.Begin);
 			for (int i = 0; i < buffer.Length; i += 2)
 			{
-				iChecksum += ReadUInt16(writer);
+				uiChecksum += ReadUInt16(writer);
 			}
-			iChecksum &= 0xffff;
-			iChecksum = 0x10000 - iChecksum;
+			uiChecksum &= 0xffff;
+			uiChecksum = 0x10000 - uiChecksum;
 			writer.Seek(0x12, SeekOrigin.Begin);
-			WriteUInt16(writer, iChecksum);
+			WriteUInt16(writer, uiChecksum);
 
 			writer.Seek(buffer.Length, SeekOrigin.Begin);
 
@@ -226,6 +229,35 @@ namespace Disassembler.MZ
 			writer.Dispose();
 		}
 
+		public void ApplyRelocations(ushort segment)
+		{
+			for (int i = 0; i < this.aRelocations.Count; i++)
+			{
+				MZRelocationItem relocation = this.aRelocations[i];
+				uint uiAddress = MemoryRegion.ToLinearAddress((ushort)relocation.Segment, (ushort)relocation.Offset);
+				ushort usWord1 = (ushort)((ushort)this.aData[uiAddress] | (ushort)((ushort)this.aData[uiAddress + 1] << 8));
+				usWord1 += segment;
+				this.aData[uiAddress] = (byte)(usWord1 & 0xff);
+				this.aData[uiAddress + 1] = (byte)((usWord1 & 0xff00) >> 8);
+			}
+
+			for (int i = 0; i < this.aOverlays.Count; i++)
+			{
+				MZExecutable overlay = this.aOverlays[i];
+
+				for (int j = 0; j < overlay.Relocations.Count; j++)
+				{
+					MZRelocationItem relocation = overlay.Relocations[j];
+					uint uiAddress = relocation.Offset;
+					ushort usWord1 = (ushort)((ushort)overlay.aData[uiAddress] | (ushort)((ushort)overlay.aData[uiAddress + 1] << 8));
+					//usWord1 += relocation.Segment;
+					usWord1 += segment;
+					overlay.aData[uiAddress] = (byte)(usWord1 & 0xff);
+					overlay.aData[uiAddress + 1] = (byte)((usWord1 & 0xff00) >> 8);
+				}
+			}
+		}
+
 		#region Helper functions
 		public static byte ReadByte(Stream stream)
 		{
@@ -239,7 +271,7 @@ namespace Disassembler.MZ
 			return (byte)(b0 & 0xff);
 		}
 
-		public static int ReadUInt16(Stream stream)
+		public static ushort ReadUInt16(Stream stream)
 		{
 			int b0 = stream.ReadByte();
 			int b1 = stream.ReadByte();
@@ -249,10 +281,10 @@ namespace Disassembler.MZ
 				throw new Exception("Unexpected end of stream");
 			}
 
-			return (b0 & 0xff) | ((b1 & 0xff) << 8);
+			return (ushort)((b0 & 0xff) | ((b1 & 0xff) << 8));
 		}
 
-		public static long ReadUInt32(Stream stream)
+		public static uint ReadUInt32(Stream stream)
 		{
 			int b0 = stream.ReadByte();
 			int b1 = stream.ReadByte();
@@ -264,7 +296,7 @@ namespace Disassembler.MZ
 				throw new Exception("Unexpected end of stream");
 			}
 
-			return (long)((uint)((uint)b0 & 0xff) | (uint)(((uint)b1 & 0xff) << 8) |
+			return (uint)((uint)((uint)b0 & 0xff) | (uint)(((uint)b1 & 0xff) << 8) |
 				(uint)(((uint)b2 & 0xff) << 16) | (uint)(((uint)b3 & 0xff) << 24));
 		}
 
@@ -296,64 +328,64 @@ namespace Disassembler.MZ
 			return Encoding.ASCII.GetString(abTemp);
 		}
 
-		public void WriteUInt16(Stream stream, int value)
+		public void WriteUInt16(Stream stream, uint value)
 		{
 			stream.WriteByte((byte)(value & 0xff));
 			stream.WriteByte((byte)((value & 0xff00) >> 8));
 		}
 		#endregion
 
-		public int Signature
+		public ushort Signature
 		{
-			get { return this.iSignature; }
+			get { return this.usSignature; }
 		}
 
-		public int MinimumAllocation
+		public ushort MinimumAllocation
 		{
-			get { return this.iMinimumAllocation; }
-			set { this.iMinimumAllocation = value; }
+			get { return this.usMinimumAllocation; }
+			set { this.usMinimumAllocation = value; }
 		}
 
-		public int MaximumAllocation
+		public ushort MaximumAllocation
 		{
-			get { return this.iMaximumAllocation; }
-			set { this.iMaximumAllocation = value; }
+			get { return this.usMaximumAllocation; }
+			set { this.usMaximumAllocation = value; }
 		}
 
-		public int InitialSS
+		public ushort InitialSS
 		{
-			get { return this.iInitialSS; }
-			set { this.iInitialSS = value; }
+			get { return this.usInitialSS; }
+			set { this.usInitialSS = value; }
 		}
 
-		public int InitialSP
+		public ushort InitialSP
 		{
-			get { return this.iInitialSP; }
-			set { this.iInitialSP = value; }
+			get { return this.usInitialSP; }
+			set { this.usInitialSP = value; }
 		}
 
-		public int InitialIP
+		public ushort InitialIP
 		{
-			get { return this.iInitialIP; }
-			set { this.iInitialIP = value; }
+			get { return this.usInitialIP; }
+			set { this.usInitialIP = value; }
 		}
 
-		public int InitialCS
+		public ushort InitialCS
 		{
-			get { return this.iInitialCS; }
-			set { this.iInitialCS = value; }
+			get { return this.usInitialCS; }
+			set { this.usInitialCS = value; }
 		}
 
-		public int OverlayIndex
+		public ushort OverlayIndex
 		{
-			get { return this.iOverlayIndex; }
-			set { this.iOverlayIndex = value; }
+			get { return this.usOverlayIndex; }
+			set { this.usOverlayIndex = value; }
 		}
 
-		public int OverlayID
+		public ushort OverlayID
 		{
-			get { return this.iOverlayID; }
-			set { this.iOverlayID = value; }
+			get { return this.usOverlayID; }
+			set { this.usOverlayID = value; }
 		}
 
 		public byte[] Data

@@ -26,8 +26,8 @@ namespace Disassembler.Decompiler
 		private int iStackSize = 0;
 
 		// assembly stuff
-		private uint uiSegment;
-		private uint uiOffset;
+		private ushort usSegment;
+		private ushort usOffset;
 		private List<Instruction> aInstructions = new List<Instruction>();
 
 		// parsed statements
@@ -35,15 +35,15 @@ namespace Disassembler.Decompiler
 
 		public static BDictionary<InstructionEnum, int> Statistics = new BDictionary<InstructionEnum, int>();
 
-		public CFunction(CDecompiler parent, CallTypeEnum callType, string name, List<CParameter> parameters, CType returnValue, uint segment, uint offset)
+		public CFunction(CDecompiler parent, CallTypeEnum callType, string name, List<CParameter> parameters, CType returnValue, ushort segment, ushort offset)
 		{
 			this.oParent = parent;
 			this.eCallType = callType;
 			this.sName = name;
 			this.aParameters = parameters;
 			this.oReturnValue = returnValue;
-			this.uiSegment = segment;
-			this.uiOffset = offset;
+			this.usSegment = segment;
+			this.usOffset = offset;
 
 			int iSize = 0;
 			if (parameters.Count > 0)
@@ -64,20 +64,20 @@ namespace Disassembler.Decompiler
 
 		public void Disassemble(CDecompiler decompiler)
 		{
-			Segment segment = decompiler.Executable.Segments[(int)this.uiSegment];
+			Segment segment = decompiler.Executable.Segments[(int)this.usSegment];
 			if ((segment.Flags & SegmentFlagsEnum.DataSegment) == SegmentFlagsEnum.DataSegment)
 				throw new Exception("You are trying to disassemble a data segment");
 
-			if (this.uiOffset < 0 || this.uiOffset >= segment.Data.Length)
+			if (this.usOffset < 0 || this.usOffset >= segment.Data.Length)
 			{
-				throw new Exception(string.Format("Offset {0} outside of segment {1} code data", this.uiOffset, this.uiSegment));
+				throw new Exception(string.Format("Offset {0} outside of segment {1} code data", this.usOffset, this.usSegment));
 			}
 
 			MemoryStream stream = new MemoryStream(segment.Data);
-			uint ip = this.uiOffset;
+			ushort ip = this.usOffset;
 			stream.Seek(ip, SeekOrigin.Begin);
-			List<uint> aJumps = new List<uint>();
-			List<uint> aSwitches = new List<uint>();
+			List<ushort> aJumps = new List<ushort>();
+			List<ushort> aSwitches = new List<ushort>();
 			bool bNextNOP = false;
 			Instruction instruction1;
 
@@ -86,13 +86,13 @@ namespace Disassembler.Decompiler
 				if (ip >= segment.Data.Length)
 				{
 					throw new Exception(string.Format("Trying to disassemble beyond segment boundary at function {0}:0x{1:x}, ip 0x{2:x}",
-						this.uiSegment, this.uiOffset, ip));
+						this.usSegment, this.usOffset, ip));
 				}
 
 				bool bEnd = false;
 				for (int i = 0; i < this.aInstructions.Count; i++)
 				{
-					if (this.aInstructions[i].Location.Offset == ip)
+					if (this.aInstructions[i].Offset == ip)
 					{
 						bEnd = true;
 						break;
@@ -102,9 +102,9 @@ namespace Disassembler.Decompiler
 				if (!bEnd)
 				{
 					InstructionParameter parameter;
-					Instruction instruction = new Instruction(this.uiSegment, ip, stream);
+					Instruction instruction = new Instruction(this.usSegment, ip, stream);
 					this.aInstructions.Add(instruction);
-					ip += (uint)instruction.Bytes.Count;
+					ip += (ushort)instruction.Bytes.Count;
 
 					if (bNextNOP)
 					{
@@ -119,33 +119,33 @@ namespace Disassembler.Decompiler
 
 							if (parameter.Type == InstructionParameterTypeEnum.Relative)
 							{
-								ip = (ip + parameter.Value) & 0xffff;
+								ip = (ushort)((ip + parameter.Value) & 0xffff);
 								stream.Seek(ip, SeekOrigin.Begin);
 							}
 							else if (parameter.Type == InstructionParameterTypeEnum.MemoryAddress && parameter.Value == 6)
 							{
 								throw new Exception(string.Format("Relative jmp to {0} at function {1}:0x{2:x} - jcc at 0x{3:x}",
-									parameter.ToString(), this.uiSegment, this.uiOffset, instruction.Location.Offset));
+									parameter.ToString(), this.usSegment, this.usOffset, instruction.Offset));
 							}
 							else
 							{
 								// probably switch statement
-								aSwitches.Add(instruction.Location.Offset);
+								aSwitches.Add(instruction.Offset);
 								bEnd = true;
 							}
 							break;
 
 						case InstructionEnum.JMPF:
 							throw new Exception(string.Format("Absolute jump inside function at {0}:0x{1:x} - jmp at 0x{2:x}",
-								this.uiSegment, this.uiOffset, instruction.Location.Offset));
+								this.usSegment, this.usOffset, instruction.Offset));
 
 						case InstructionEnum.Jcc:
 							parameter = instruction.Parameters[1];
 							if (parameter.Type != InstructionParameterTypeEnum.Relative)
 								throw new Exception(string.Format("Relative adress offset expected, gut got {0} at function {1}:0x{2:x} - instruction at 0x{3:x}",
-									parameter.ToString(), this.uiSegment, this.uiOffset, instruction.Location.Offset));
+									parameter.ToString(), this.usSegment, this.usOffset, instruction.Offset));
 
-							aJumps.Add((ip + parameter.Value) & 0xffff);
+							aJumps.Add((ushort)((ip + parameter.Value) & 0xffff));
 							break;
 
 						case InstructionEnum.LOOP:
@@ -155,18 +155,18 @@ namespace Disassembler.Decompiler
 							parameter = instruction.Parameters[0];
 							if (parameter.Type != InstructionParameterTypeEnum.Relative)
 								throw new Exception(string.Format("Relative adress offset expected, gut got {0} at function {1}:0x{2:x} - instruction at 0x{3:x}",
-									parameter.ToString(), this.uiSegment, this.uiOffset, instruction.Location.Offset));
+									parameter.ToString(), this.usSegment, this.usOffset, instruction.Offset));
 
-							aJumps.Add((ip + parameter.Value) & 0xffff);
+							aJumps.Add((ushort)((ip + parameter.Value) & 0xffff));
 							break;
 
 						case InstructionEnum.IRET:
 							throw new Exception(string.Format("Unexpected return from interrupt at function {0}:0x{1:x}",
-								this.uiSegment, this.uiOffset));
+								this.usSegment, this.usOffset));
 
 						case InstructionEnum.RET:
 							throw new Exception(string.Format("Unexpected near return at function {0}:0x{1:x}",
-								this.uiSegment, this.uiOffset));
+								this.usSegment, this.usOffset));
 
 						case InstructionEnum.RETF:
 							if (this.eCallType != CallTypeEnum.Undefined)
@@ -210,7 +210,7 @@ namespace Disassembler.Decompiler
 						int iPos = -1;
 						for (int i = 0; i < this.aInstructions.Count; i++)
 						{
-							if (this.aInstructions[i].Location.Offset == ip)
+							if (this.aInstructions[i].Offset == ip)
 							{
 								iPos = i;
 								break;
@@ -224,8 +224,8 @@ namespace Disassembler.Decompiler
 								InstructionParameter parameter;
 								InstructionParameter jumpParameter;
 								uint uiCount = 0;
-								uint uiOffset = 0;
-								uint uiDefault = 0;
+								ushort usOffset = 0;
+								ushort usDefault = 0;
 
 								// first pattern
 								if ((instruction1 = this.aInstructions[iPos1 = iPos - 8]).InstructionType == InstructionEnum.MOV &&
@@ -240,7 +240,7 @@ namespace Disassembler.Decompiler
 									instruction1.Parameters[0].Type == InstructionParameterTypeEnum.Register &&
 									instruction1.Parameters[0].Value == ((uint)RegisterEnum.BX & 0x7) &&
 									instruction1.Parameters[1].Type == InstructionParameterTypeEnum.Immediate &&
-									(uiOffset = instruction1.Parameters[1].Value) > 0 &&
+									(usOffset = (ushort)instruction1.Parameters[1].Value) > 0 &&
 
 									(instruction1 = this.aInstructions[++iPos1]).InstructionType == InstructionEnum.MOV &&
 									instruction1.Parameters.Count == 2 &&
@@ -277,7 +277,7 @@ namespace Disassembler.Decompiler
 									(instruction1 = this.aInstructions[++iPos1]).InstructionType == InstructionEnum.JMP &&
 									instruction1.Parameters.Count == 1 &&
 									instruction1.Parameters[0].Type == InstructionParameterTypeEnum.Relative &&
-									(uiDefault = (instruction1.Location.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[0].Value) & 0xffff) > 0 &&
+									(usDefault = (ushort)((instruction1.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[0].Value) & 0xffff)) > 0 &&
 
 									(instruction1 = this.aInstructions[++iPos1]).InstructionType == InstructionEnum.JMP &&
 									instruction1.Parameters.Count == 1 &&
@@ -304,7 +304,7 @@ namespace Disassembler.Decompiler
 									// switching parameter
 									instruction1.Parameters.Add(parameter);
 
-									stream.Seek(uiOffset, SeekOrigin.Begin);
+									stream.Seek(usOffset, SeekOrigin.Begin);
 									// read values
 									for (int i = 0; i < uiCount; i++)
 									{
@@ -315,12 +315,12 @@ namespace Disassembler.Decompiler
 
 									for (int i = 0; i < uiCount; i++)
 									{
-										uint uiWord = ReadWord(stream);
-										aJumps.Add(uiWord);
-										instruction1.Parameters[i + 1].Displacement = uiWord;
+										ushort usWord = ReadWord(stream);
+										aJumps.Add(usWord);
+										instruction1.Parameters[i + 1].Displacement = usWord;
 									}
-									aJumps.Add(uiDefault);
-									instruction1.Parameters[(int)uiCount + 1].Displacement = uiDefault;
+									aJumps.Add(usDefault);
+									instruction1.Parameters[(int)uiCount + 1].Displacement = usDefault;
 
 									ip = aJumps[aJumps.Count - 1];
 									aJumps.RemoveAt(aJumps.Count - 1);
@@ -339,7 +339,7 @@ namespace Disassembler.Decompiler
 									instruction1.Parameters[0].Type == InstructionParameterTypeEnum.Condition &&
 									instruction1.Parameters[0].Value == ((uint)ConditionEnum.A) &&
 									instruction1.Parameters[1].Type == InstructionParameterTypeEnum.Relative &&
-									(uiDefault = (instruction1.Location.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[1].Value) & 0xffff) > 0 &&
+									(usDefault = (ushort)((instruction1.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[1].Value) & 0xffff)) > 0 &&
 
 									(instruction1 = this.aInstructions[++iPos1]).InstructionType == InstructionEnum.SHL &&
 									instruction1.Parameters.Count == 2 &&
@@ -350,7 +350,7 @@ namespace Disassembler.Decompiler
 
 									(instruction1 = this.aInstructions[++iPos1]).InstructionType == InstructionEnum.JMP &&
 									instruction1.Parameters[0].Type == InstructionParameterTypeEnum.MemoryAddress &&
-									(uiOffset = instruction1.Parameters[0].Displacement) > 0 &&
+									(usOffset = (ushort)instruction1.Parameters[0].Displacement) > 0 &&
 
 									iPos == iPos1
 									)
@@ -367,21 +367,21 @@ namespace Disassembler.Decompiler
 									// switching parameter
 									instruction1.Parameters.Add(parameter);
 
-									stream.Seek(uiOffset, SeekOrigin.Begin);
+									stream.Seek(usOffset, SeekOrigin.Begin);
 
 									for (int i = 0; i <= uiCount; i++)
 									{
-										uint uiWord = ReadWord(stream);
-										aJumps.Add(uiWord);
+										ushort usWord = ReadWord(stream);
+										aJumps.Add(usWord);
 										parameter = new InstructionParameter(InstructionParameterTypeEnum.Immediate, (uint)i);
-										parameter.Displacement = uiWord;
+										parameter.Displacement = usWord;
 										instruction1.Parameters.Add(parameter);
 									}
 
-									aJumps.Add(uiDefault);
+									aJumps.Add(usDefault);
 									// last value is the default value
 									parameter = new InstructionParameter(InstructionParameterTypeEnum.Immediate, 0);
-									parameter.Displacement = uiDefault;
+									parameter.Displacement = usDefault;
 									instruction1.Parameters.Add(parameter);
 
 									ip = aJumps[aJumps.Count - 1];
@@ -405,7 +405,7 @@ namespace Disassembler.Decompiler
 									(instruction1 = this.aInstructions[++iPos1]).InstructionType == InstructionEnum.JMP &&
 									instruction1.Parameters.Count == 1 &&
 									instruction1.Parameters[0].Type == InstructionParameterTypeEnum.Relative &&
-									(uiDefault = (instruction1.Location.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[0].Value) & 0xffff) > 0 &&
+									(usDefault = (ushort)((instruction1.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[0].Value) & 0xffff)) > 0 &&
 
 									(instruction1 = this.aInstructions[++iPos1]).InstructionType == InstructionEnum.SHL &&
 									instruction1.Parameters.Count == 2 &&
@@ -416,7 +416,7 @@ namespace Disassembler.Decompiler
 
 									(instruction1 = this.aInstructions[++iPos1]).InstructionType == InstructionEnum.JMP &&
 									instruction1.Parameters[0].Type == InstructionParameterTypeEnum.MemoryAddress &&
-									(uiOffset = instruction1.Parameters[0].Displacement) > 0 &&
+									(usOffset = (ushort)instruction1.Parameters[0].Displacement) > 0 &&
 
 									iPos == iPos1
 									)
@@ -434,21 +434,21 @@ namespace Disassembler.Decompiler
 									// switching parameter
 									instruction1.Parameters.Add(parameter);
 
-									stream.Seek(uiOffset, SeekOrigin.Begin);
+									stream.Seek(usOffset, SeekOrigin.Begin);
 
 									for (int i = 0; i <= uiCount; i++)
 									{
-										uint uiWord = ReadWord(stream);
-										aJumps.Add(uiWord);
+										ushort usWord = ReadWord(stream);
+										aJumps.Add(usWord);
 										parameter = new InstructionParameter(InstructionParameterTypeEnum.Immediate, (uint)i);
-										parameter.Displacement = uiWord;
+										parameter.Displacement = usWord;
 										instruction1.Parameters.Add(parameter);
 									}
 
-									aJumps.Add(uiDefault);
+									aJumps.Add(usDefault);
 									// last value is the default value
 									parameter = new InstructionParameter(InstructionParameterTypeEnum.Immediate, 0);
-									parameter.Displacement = uiDefault;
+									parameter.Displacement = usDefault;
 									instruction1.Parameters.Add(parameter);
 
 									ip = aJumps[aJumps.Count - 1];
@@ -459,7 +459,7 @@ namespace Disassembler.Decompiler
 								{
 									Instruction instruction = this.aInstructions[iPos];
 									Console.WriteLine("Undefined switch pattern to {0} at function {1}:0x{2:x} - jmp at 0x{3:x}",
-										instruction.Parameters[0].ToString(), this.uiSegment, this.uiOffset, instruction.Location.Offset);
+										instruction.Parameters[0].ToString(), this.usSegment, this.usOffset, instruction.Offset);
 									break;
 								}
 							}
@@ -620,7 +620,7 @@ namespace Disassembler.Decompiler
 							else
 							{
 								throw new Exception(string.Format("Improperly restored stack address at function {0}:0x{1:x}",
-									this.uiSegment, this.uiOffset));
+									this.usSegment, this.usOffset));
 							}
 						}
 					}
@@ -638,7 +638,7 @@ namespace Disassembler.Decompiler
 						else
 						{
 							throw new Exception(string.Format("Improperly restored stack address at function {0}:0x{1:x}", 
-								this.uiSegment, this.uiOffset));
+								this.usSegment, this.usOffset));
 						}
 					}
 				}
@@ -666,7 +666,7 @@ namespace Disassembler.Decompiler
 			}
 			else
 			{
-				throw new Exception(string.Format("Unknown function format at function {0}:0x{1:x}", this.uiSegment, this.uiOffset));
+				throw new Exception(string.Format("Unknown function format at function {0}:0x{1:x}", this.usSegment, this.usOffset));
 			}
 			#endregion
 
@@ -678,7 +678,7 @@ namespace Disassembler.Decompiler
 				for (int j = 0; j < segment.Relocations.Count; j++)
 				{
 					Relocation relocation = segment.Relocations[j];
-					if (relocation.Offset >= instruction.Location.Offset && relocation.Offset - instruction.Location.Offset < instruction.Bytes.Count)
+					if (relocation.Offset >= instruction.Offset && relocation.Offset - instruction.Offset < instruction.Bytes.Count)
 					{
 						switch (relocation.RelocationType)
 						{
@@ -800,33 +800,33 @@ namespace Disassembler.Decompiler
 					case InstructionEnum.JMP:
 						parameter = instruction.Parameters[0];
 						// force resulting ip to 16 bit result
-						uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
+						uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
 
 						// optimize immediate jumps
 						uiNewOffset2 = uiNewOffset;
 						while ((instruction1 = this.aInstructions[GetPositionFromOffset(uiNewOffset2)]).InstructionType == InstructionEnum.JMP)
 						{
-							uiNewOffset2 = (instruction1.Location.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[0].Value) & 0xffff;
+							uiNewOffset2 = (instruction1.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[0].Value) & 0xffff;
 						}
 						if (uiNewOffset != uiNewOffset2)
 						{
-							parameter.Value = uiNewOffset2 - (instruction.Location.Offset + (uint)instruction.Bytes.Count);
+							parameter.Value = uiNewOffset2 - (instruction.Offset + (uint)instruction.Bytes.Count);
 						}
 						break;
 					case InstructionEnum.Jcc:
 						parameter = instruction.Parameters[1];
 						// force resulting ip to 16 bit result
-						uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
+						uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
 
 						// optimize immediate jumps
 						uiNewOffset2 = uiNewOffset;
 						while ((instruction1 = this.aInstructions[GetPositionFromOffset(uiNewOffset2)]).InstructionType == InstructionEnum.JMP)
 						{
-							uiNewOffset2 = (instruction1.Location.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[0].Value) & 0xffff;
+							uiNewOffset2 = (instruction1.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[0].Value) & 0xffff;
 						}
 						if (uiNewOffset != uiNewOffset2)
 						{
-							parameter.Value = uiNewOffset2 - (instruction.Location.Offset + (uint)instruction.Bytes.Count);
+							parameter.Value = uiNewOffset2 - (instruction.Offset + (uint)instruction.Bytes.Count);
 						}
 						break;
 				}
@@ -846,14 +846,14 @@ namespace Disassembler.Decompiler
 						parameter = instruction.Parameters[0];
 						if (parameter.Type != InstructionParameterTypeEnum.Relative)
 							throw new Exception(string.Format("Relative adress offset expected, but got {0} at function {1}:0x{2:x} - instruction at 0x{3:x}",
-								parameter.ToString(), this.uiSegment, this.uiOffset, instruction.Location.Offset));
+								parameter.ToString(), this.usSegment, this.usOffset, instruction.Offset));
 
 						// force resulting ip to 16 bit result
-						uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
+						uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
 
 						instruction.InstructionType = InstructionEnum.CALLF;
 						instruction.Parameters.RemoveAt(0);
-						instruction.Parameters.Add(new InstructionParameter(this.uiSegment, uiNewOffset));
+						instruction.Parameters.Add(new InstructionParameter(this.usSegment, uiNewOffset));
 
 						// is instruction prefixed by PUSH CS?
 						instruction1 = this.aInstructions[i - 1];
@@ -870,11 +870,11 @@ namespace Disassembler.Decompiler
 					case InstructionEnum.JMP:
 						parameter = instruction.Parameters[0];
 						// force resulting ip to 16 bit result
-						uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
+						uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
 
 						// optimize immediate jumps
 						if (i + 1 < this.aInstructions.Count && uiNewOffset > 0 &&
-							this.aInstructions[i + 1].Location.Offset == uiNewOffset)
+							this.aInstructions[i + 1].Offset == uiNewOffset)
 						{
 							// this is just a jump to next instruction, ignore it
 							this.aInstructions[i].InstructionType = InstructionEnum.NOP;
@@ -887,7 +887,7 @@ namespace Disassembler.Decompiler
 					case InstructionEnum.Jcc:
 						parameter = instruction.Parameters[1];
 						// force resulting ip to 16 bit result
-						uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
+						uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
 
 						if (uiNewOffset > 0)
 						{
@@ -900,7 +900,7 @@ namespace Disassembler.Decompiler
 					case InstructionEnum.JCXZ:
 						parameter = instruction.Parameters[0];
 						// force resulting ip to 16 bit result
-						uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
+						uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
 
 						if (uiNewOffset > 0)
 						{
@@ -912,9 +912,9 @@ namespace Disassembler.Decompiler
 
 						if (parameter.ReferenceType == InstructionParameterReferenceEnum.Segment)
 						{
-							uint uiSegment = parameter.Value;
+							ushort usSegment = (ushort)parameter.Value;
 
-							if ((this.oParent.Executable.Segments[(int)uiSegment].Flags & SegmentFlagsEnum.DataSegment) != SegmentFlagsEnum.DataSegment)
+							if ((this.oParent.Executable.Segments[usSegment].Flags & SegmentFlagsEnum.DataSegment) != SegmentFlagsEnum.DataSegment)
 							{
 								// this should be code segment
 								if (i + 1 < this.aInstructions.Count &&
@@ -923,12 +923,12 @@ namespace Disassembler.Decompiler
 									(parameter = instruction.Parameters[0]).Type == InstructionParameterTypeEnum.Immediate &&
 									parameter.Size == InstructionSizeEnum.Word)
 								{
-									CFunction function = decompiler.GetFunction(uiSegment, parameter.Value);
+									CFunction function = decompiler.GetFunction(usSegment, (ushort)parameter.Value);
 									if (function == null)
 									{
 										// function is not yet defined, define it
-										decompiler.Decompile(string.Format("F{0}_{1:x}", uiSegment, parameter.Value),
-											CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, uiSegment, parameter.Value);
+										decompiler.Decompile(string.Format("F{0}_{1:x}", usSegment, parameter.Value),
+											CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, usSegment, (ushort)parameter.Value);
 									}
 								}
 							}
@@ -955,26 +955,26 @@ namespace Disassembler.Decompiler
 				if (i + 2 < this.aInstructions.Count &&
 					(instruction1 = this.aInstructions[i]).InstructionType == InstructionEnum.Jcc &&
 					instruction1.Parameters.Count == 2 &&
-					(uiNewOffset = (instruction1.Location.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[1].Value) & 0xffff) >= 0 &&
+					(uiNewOffset = (instruction1.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[1].Value) & 0xffff) >= 0 &&
 
 					(instruction1 = this.aInstructions[i + 1]).InstructionType == InstructionEnum.JMP &&
 					instruction1.Parameters.Count == 1 &&
-					(uiNewOffset2 = (instruction1.Location.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[0].Value) & 0xffff) >= 0 &&
+					(uiNewOffset2 = (instruction1.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[0].Value) & 0xffff) >= 0 &&
 
-					(instruction1 = this.aInstructions[i + 2]).Location.Offset == uiNewOffset)
+					(instruction1 = this.aInstructions[i + 2]).Offset == uiNewOffset)
 				{
 					Instruction instruction = this.aInstructions[i];
 					
 					// goto can't be referenced to in this combination
 					if (this.aInstructions[i + 1].Label)
 						throw new Exception(string.Format("Unexpected label at function {0}:0x{1:x}, position 0x{2:x}",
-							this.uiSegment, this.uiOffset, instruction.Location.Offset));
+							this.usSegment, this.usOffset, instruction.Offset));
 
 					this.aInstructions[i + 1].InstructionType = InstructionEnum.NOP;
 
 					InstructionParameter parameter = instruction.Parameters[0];
 					parameter.Value = (uint)NegateCondition((ConditionEnum)parameter.Value);
-					instruction.Parameters[1].Value = uiNewOffset2 - (instruction.Location.Offset + (uint)instruction.Bytes.Count);
+					instruction.Parameters[1].Value = uiNewOffset2 - (instruction.Offset + (uint)instruction.Bytes.Count);
 				}
 			}
 			#endregion
@@ -996,7 +996,7 @@ namespace Disassembler.Decompiler
 					case InstructionEnum.JMP:
 						parameter = instruction.Parameters[0];
 						// force resulting ip to 16 bit result
-						uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
+						uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
 
 						if (uiNewOffset > 0)
 						{
@@ -1006,7 +1006,7 @@ namespace Disassembler.Decompiler
 					case InstructionEnum.Jcc:
 						parameter = instruction.Parameters[1];
 						// force resulting ip to 16 bit result
-						uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
+						uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
 
 						if (uiNewOffset > 0)
 						{
@@ -1019,7 +1019,7 @@ namespace Disassembler.Decompiler
 					case InstructionEnum.JCXZ:
 						parameter = instruction.Parameters[0];
 						// force resulting ip to 16 bit result
-						uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
+						uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + parameter.Value) & 0xffff;
 
 						if (uiNewOffset > 0)
 						{
@@ -1134,7 +1134,7 @@ namespace Disassembler.Decompiler
 			for (int i = 0; i < this.aInstructions.Count; i++)
 			{
 				// match ES data reference
-				uint uiSegmentValue = 0;
+				ushort usSegmentValue = 0;
 				uint sourceReg;
 
 				// form 1
@@ -1145,7 +1145,7 @@ namespace Disassembler.Decompiler
 					instruction1.Parameters[0].Type == InstructionParameterTypeEnum.Register &&
 					(sourceReg = instruction1.Parameters[0].Value) <= 7 &&
 					instruction1.Parameters[1].Type == InstructionParameterTypeEnum.Immediate &&
-					(uiSegmentValue = instruction1.Parameters[1].Value) >= 0 &&
+					(usSegmentValue = (ushort)instruction1.Parameters[1].Value) >= 0 &&
 
 					(instruction1 = this.aInstructions[i + 1]).InstructionType == InstructionEnum.MOV &&
 					instruction1.OperandSize == InstructionSizeEnum.Word &&
@@ -1166,13 +1166,13 @@ namespace Disassembler.Decompiler
 						if (instruction.Parameters.Count > 0 && instruction.Parameters[0].DataSegment == SegmentRegisterEnum.ES)
 						{
 							this.aInstructions[iPos].Parameters[0].DataSegment = SegmentRegisterEnum.Immediate;
-							this.aInstructions[iPos].Parameters[0].SegmentAddress = uiSegmentValue;
+							this.aInstructions[iPos].Parameters[0].Segment = usSegmentValue;
 							bMatch = true;
 						}
 						if (instruction.Parameters.Count > 1 && instruction.Parameters[1].DataSegment == SegmentRegisterEnum.ES)
 						{
 							this.aInstructions[iPos].Parameters[1].DataSegment = SegmentRegisterEnum.Immediate;
-							this.aInstructions[iPos].Parameters[1].SegmentAddress = uiSegmentValue;
+							this.aInstructions[iPos].Parameters[1].Segment = usSegmentValue;
 							bMatch = true;
 						}
 						if (bMatch)
@@ -1191,7 +1191,7 @@ namespace Disassembler.Decompiler
 					{
 						if (CheckIfUsed(i + 2, iEnd, InstructionSizeEnum.Word, InstructionParameterTypeEnum.Register, sourceReg))
 						{
-							Console.WriteLine("Found used register {0} at 0x{1:x}", ((RegisterEnum)sourceReg + 8).ToString(), this.aInstructions[i].Location.LinearAddress);
+							Console.WriteLine("Found used register {0} at 0x{1:x}", ((RegisterEnum)sourceReg + 8).ToString(), this.aInstructions[i].LinearAddress);
 						}
 						else
 						{
@@ -1203,8 +1203,8 @@ namespace Disassembler.Decompiler
 						}
 						else if (CheckIfUsed(iPos, iEnd, InstructionSizeEnum.Word, InstructionParameterTypeEnum.SegmentRegister, (uint)SegmentRegisterEnum.ES))
 						{
-							Console.WriteLine("Found used segment register {0} at 0x{1:x}", SegmentRegisterEnum.ES.ToString(), this.aInstructions[i].Location.LinearAddress);
-							this.aInstructions[i + 1].Parameters[1] = new InstructionParameter(InstructionParameterTypeEnum.Immediate, uiSegmentValue);
+							Console.WriteLine("Found used segment register {0} at 0x{1:x}", SegmentRegisterEnum.ES.ToString(), this.aInstructions[i].LinearAddress);
+							this.aInstructions[i + 1].Parameters[1] = new InstructionParameter(InstructionParameterTypeEnum.Immediate, usSegmentValue);
 						}
 						else
 						{
@@ -1221,7 +1221,7 @@ namespace Disassembler.Decompiler
 					instruction1.Parameters[0].Type == InstructionParameterTypeEnum.Register &&
 					(sourceReg = instruction1.Parameters[0].Value) <= 7 &&
 					instruction1.Parameters[1].Type == InstructionParameterTypeEnum.Immediate &&
-					(uiSegmentValue = instruction1.Parameters[1].Value) >= 0 &&
+					(usSegmentValue = (ushort)instruction1.Parameters[1].Value) >= 0 &&
 
 					(instruction1 = this.aInstructions[i + 2]).InstructionType == InstructionEnum.MOV &&
 					instruction1.OperandSize == InstructionSizeEnum.Word &&
@@ -1242,13 +1242,13 @@ namespace Disassembler.Decompiler
 						if (instruction.Parameters.Count > 0 && instruction.Parameters[0].DataSegment == SegmentRegisterEnum.ES)
 						{
 							this.aInstructions[iPos].Parameters[0].DataSegment = SegmentRegisterEnum.Immediate;
-							this.aInstructions[iPos].Parameters[0].SegmentAddress = uiSegmentValue;
+							this.aInstructions[iPos].Parameters[0].Segment = usSegmentValue;
 							bMatch = true;
 						}
 						if (instruction.Parameters.Count > 1 && instruction.Parameters[1].DataSegment == SegmentRegisterEnum.ES)
 						{
 							this.aInstructions[iPos].Parameters[1].DataSegment = SegmentRegisterEnum.Immediate;
-							this.aInstructions[iPos].Parameters[1].SegmentAddress = uiSegmentValue;
+							this.aInstructions[iPos].Parameters[1].Segment = usSegmentValue;
 							bMatch = true;
 						}
 						if (bMatch)
@@ -1267,7 +1267,7 @@ namespace Disassembler.Decompiler
 					{
 						if (CheckIfUsed(i + 3, iEnd, InstructionSizeEnum.Word, InstructionParameterTypeEnum.Register, sourceReg))
 						{
-							Console.WriteLine("Found used register {0} at 0x{1:x}", ((RegisterEnum)sourceReg + 8).ToString(), this.aInstructions[i].Location.LinearAddress);
+							Console.WriteLine("Found used register {0} at 0x{1:x}", ((RegisterEnum)sourceReg + 8).ToString(), this.aInstructions[i].LinearAddress);
 						}
 						else
 						{
@@ -1279,8 +1279,8 @@ namespace Disassembler.Decompiler
 						}
 						else if (CheckIfUsed(iPos, iEnd, InstructionSizeEnum.Word, InstructionParameterTypeEnum.SegmentRegister, (uint)SegmentRegisterEnum.ES))
 						{
-							Console.WriteLine("Found used segment register {0} at 0x{1:x}", SegmentRegisterEnum.ES.ToString(), this.aInstructions[i].Location.LinearAddress);
-							this.aInstructions[i + 2].Parameters[1] = new InstructionParameter(InstructionParameterTypeEnum.Immediate, uiSegmentValue);
+							Console.WriteLine("Found used segment register {0} at 0x{1:x}", SegmentRegisterEnum.ES.ToString(), this.aInstructions[i].LinearAddress);
+							this.aInstructions[i + 2].Parameters[1] = new InstructionParameter(InstructionParameterTypeEnum.Immediate, usSegmentValue);
 						}
 						else
 						{
@@ -1303,7 +1303,7 @@ namespace Disassembler.Decompiler
 						parameter = instruction.Parameters[0];
 						if (parameter.Type == InstructionParameterTypeEnum.SegmentOffset)
 						{
-							if (parameter.SegmentAddress == 50 && parameter.Value == 0x501)
+							if (parameter.Segment == 50 && parameter.Value == 0x501)
 							{
 								// ignore old OpenResFile function
 								instruction.InstructionType = InstructionEnum.NOP;
@@ -1311,7 +1311,7 @@ namespace Disassembler.Decompiler
 								break;
 							}
 
-							if (parameter.SegmentAddress == 41 && parameter.Value == 0x3c)
+							if (parameter.Segment == 41 && parameter.Value == 0x3c)
 							{
 								// this is a leftover function code which does nothing, but reveals original function name
 								uint lpFunctionName;
@@ -1376,18 +1376,18 @@ namespace Disassembler.Decompiler
 								}
 								else
 								{
-									throw new Exception(string.Format("Unknown GetFunctionName format at function {0}:0x{1:x}", this.uiSegment, this.uiOffset));
+									throw new Exception(string.Format("Unknown GetFunctionName format at function {0}:0x{1:x}", this.usSegment, this.usOffset));
 								}
 								break;
 							}
 
-							CFunction function = decompiler.GetFunction(parameter.SegmentAddress, parameter.Value);
-							if (parameter.SegmentAddress != 0 && function == null)
+							CFunction function = decompiler.GetFunction(parameter.Segment, (ushort)parameter.Value);
+							if (parameter.Segment != 0 && function == null)
 							{
 								// function is not yet defined, define it
-								decompiler.Decompile(string.Format("F{0}_{1:x}", parameter.SegmentAddress, parameter.Value),
-									CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, parameter.SegmentAddress, parameter.Value);
-								function = decompiler.GetFunction(parameter.SegmentAddress, parameter.Value);
+								decompiler.Decompile(string.Format("F{0}_{1:x}", parameter.Segment, parameter.Value),
+									CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, parameter.Segment, (ushort)parameter.Value);
+								function = decompiler.GetFunction(parameter.Segment, (ushort)parameter.Value);
 							}
 
 							// there are some problems with parameters, disable for now
@@ -1529,14 +1529,14 @@ namespace Disassembler.Decompiler
 
 					(instruction1 = this.aInstructions[i + 1]).InstructionType == InstructionEnum.Jcc &&
 					instruction1.Parameters.Count == 2 &&
-					(uiNewOffset = (instruction1.Location.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[1].Value) & 0xffff) >= 0)
+					(uiNewOffset = (instruction1.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[1].Value) & 0xffff) >= 0)
 				{
 					Instruction instruction = this.aInstructions[i];
 
 					// jcc can't be referenced to in this combination
 					if (instruction1.Label)
 						throw new Exception(string.Format("Unexpected label at function {0}:0x{1:x}, position 0x{2:x}",
-							this.uiSegment, this.uiOffset, instruction1.Location.Offset));
+							this.usSegment, this.usOffset, instruction1.Offset));
 
 					instruction.InstructionType = InstructionEnum.If;
 					instruction.Parameters.AddRange(instruction1.Parameters);
@@ -1555,7 +1555,7 @@ namespace Disassembler.Decompiler
 							// jcc can't be referenced to in this combination
 							if (instruction1.Label)
 								throw new Exception(string.Format("Unexpected label at function {0}:0x{1:x}, position 0x{2:x}",
-									this.uiSegment, this.uiOffset, instruction1.Location.Offset));
+									this.usSegment, this.usOffset, instruction1.Offset));
 
 							instruction1.Parameters.Insert(0, instruction.Parameters[0]);
 							instruction1.Parameters.Insert(1, instruction.Parameters[1]);
@@ -1570,14 +1570,14 @@ namespace Disassembler.Decompiler
 
 					(instruction1 = this.aInstructions[i + 1]).InstructionType == InstructionEnum.Jcc &&
 					instruction1.Parameters.Count == 2 &&
-					(uiNewOffset = (instruction1.Location.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[1].Value) & 0xffff) >= 0)
+					(uiNewOffset = (instruction1.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[1].Value) & 0xffff) >= 0)
 				{
 					Instruction instruction = this.aInstructions[i];
 
 					// jcc can't be referenced to in this combination
 					if (instruction1.Label)
 						throw new Exception(string.Format("Unexpected label at function {0}:0x{1:x}, position 0x{2:x}",
-							this.uiSegment, this.uiOffset, instruction1.Location.Offset));
+							this.usSegment, this.usOffset, instruction1.Offset));
 
 					instruction.InstructionType = InstructionEnum.IfAnd;
 					instruction.Parameters.AddRange(instruction1.Parameters);
@@ -1593,7 +1593,7 @@ namespace Disassembler.Decompiler
 						// jcc can't be referenced to in this combination
 						if (instruction1.Label)
 							throw new Exception(string.Format("Unexpected label at function {0}:0x{1:x}, position 0x{2:x}",
-								this.uiSegment, this.uiOffset, instruction1.Location.Offset));
+								this.usSegment, this.usOffset, instruction1.Offset));
 
 						instruction1.Parameters.Insert(0, instruction.Parameters[0]);
 						instruction1.Parameters.Insert(1, instruction.Parameters[1]);
@@ -1610,14 +1610,14 @@ namespace Disassembler.Decompiler
 
 					(instruction1 = this.aInstructions[i + 1]).InstructionType == InstructionEnum.Jcc &&
 					instruction1.Parameters.Count == 2 &&
-					(uiNewOffset = (instruction1.Location.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[1].Value) & 0xffff) >= 0)
+					(uiNewOffset = (instruction1.Offset + (uint)instruction1.Bytes.Count + instruction1.Parameters[1].Value) & 0xffff) >= 0)
 				{
 					Instruction instruction = this.aInstructions[i];
 
 					// jcc can't be referenced to in this combination
 					if (instruction1.Label)
 						throw new Exception(string.Format("Unexpected label at function {0}:0x{1:x}, position 0x{2:x}",
-							this.uiSegment, this.uiOffset, instruction1.Location.Offset));
+							this.usSegment, this.usOffset, instruction1.Offset));
 
 					instruction.InstructionType = InstructionEnum.IfOr;
 					instruction.Parameters.AddRange(instruction1.Parameters);
@@ -1633,7 +1633,7 @@ namespace Disassembler.Decompiler
 						// jcc can't be referenced to in this combination
 						if (instruction1.Label)
 							throw new Exception(string.Format("Unexpected label at function {0}:0x{1:x}, position 0x{2:x}",
-								this.uiSegment, this.uiOffset, instruction1.Location.Offset));
+								this.usSegment, this.usOffset, instruction1.Offset));
 
 						instruction1.Parameters.Insert(0, instruction.Parameters[0]);
 						instruction1.Parameters.Insert(1, instruction.Parameters[1]);
@@ -1692,7 +1692,7 @@ namespace Disassembler.Decompiler
 
 			for (int i = 0; i < this.aInstructions.Count; i++)
 			{
-				if (this.aInstructions[i].Location.Offset == offset)
+				if (this.aInstructions[i].Offset == offset)
 				{
 					iPosition = i;
 					break;
@@ -1701,7 +1701,7 @@ namespace Disassembler.Decompiler
 
 			if (iPosition == -1)
 				throw new Exception(string.Format("Can't find the offset 0x{0} in function {1}:0x{2}", 
-					offset, this.uiSegment, this.uiOffset));
+					offset, this.usSegment, this.usOffset));
 
 			return iPosition;
 		}
@@ -1722,7 +1722,7 @@ namespace Disassembler.Decompiler
 				{
 					if (instruction.Parameters.Count == 1 && instruction.Parameters[0].Type == InstructionParameterTypeEnum.Relative)
 					{
-						uint uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
+						uint uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
 
 						position = GetPositionFromOffset(uiNewOffset) - 1;
 					}
@@ -1753,7 +1753,7 @@ namespace Disassembler.Decompiler
 				// direct jump
 				if (instruction.InstructionType == InstructionEnum.JMP)
 				{
-					uint uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
+					uint uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
 
 					position = GetPositionFromOffset(uiNewOffset) + 1;
 					continue;
@@ -1781,7 +1781,7 @@ namespace Disassembler.Decompiler
 				if (instruction.InstructionType == InstructionEnum.Undefined)
 				{
 					Console.WriteLine("Undefined instruction at function {0}:0x{1:x}, position 0x{2:x}",
-						this.uiSegment, this.uiOffset, instruction.Location.Offset);
+						this.usSegment, this.usOffset, instruction.Offset);
 				}
 
 				if (Statistics.ContainsKey(instruction.InstructionType))
@@ -2289,9 +2289,9 @@ namespace Disassembler.Decompiler
 				Instruction instruction = this.aInstructions[i];
 				uint uiNewOffset;
 
-				if (instruction.Label && checkedJumps.IndexOf(instruction.Location.Offset) < 0)
+				if (instruction.Label && checkedJumps.IndexOf(instruction.Offset) < 0)
 				{
-					checkedJumps.Add(instruction.Location.Offset);
+					checkedJumps.Add(instruction.Offset);
 				}
 
 				switch (instruction.InstructionType)
@@ -2648,7 +2648,7 @@ namespace Disassembler.Decompiler
 					case InstructionEnum.Jcc:
 						if (instruction.Parameters[1].Type == InstructionParameterTypeEnum.Relative)
 						{
-							uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[1].Value) & 0xffff;
+							uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[1].Value) & 0xffff;
 							callJumps.Add(uiNewOffset);
 						}
 						else
@@ -2659,7 +2659,7 @@ namespace Disassembler.Decompiler
 					case InstructionEnum.LOOP:
 						if (instruction.Parameters[0].Type == InstructionParameterTypeEnum.Relative)
 						{
-							uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
+							uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
 							callJumps.Add(uiNewOffset);
 						}
 						else
@@ -2670,7 +2670,7 @@ namespace Disassembler.Decompiler
 					case InstructionEnum.JMP:
 						if (instruction.Parameters[0].Type == InstructionParameterTypeEnum.Relative)
 						{
-							uiNewOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
+							uiNewOffset = (instruction.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
 							callJumps.Add(uiNewOffset);
 							bEndLoop = true;
 						}
@@ -2713,7 +2713,7 @@ namespace Disassembler.Decompiler
 
 					for (int i = 0; i < this.aInstructions.Count; i++)
 					{
-						if (this.aInstructions[i].Location.Offset == uiOffset)
+						if (this.aInstructions[i].Offset == uiOffset)
 						{
 							return CheckIfUsedRecursive(i, endPos, size, parameterType, byteRegisterLow, byteRegisterHigh, wordRegister, callJumps, checkedJumps);
 						}
@@ -3104,12 +3104,12 @@ namespace Disassembler.Decompiler
 
 		public uint Segment
 		{
-			get { return this.uiSegment; }
+			get { return this.usSegment; }
 		}
 
 		public uint Offset
 		{
-			get { return this.uiOffset; }
+			get { return this.usOffset; }
 		}
 
 		public List<Instruction> Instructions

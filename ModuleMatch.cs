@@ -1,4 +1,5 @@
-﻿using Disassembler.NE;
+﻿using Disassembler.CPU;
+using Disassembler.NE;
 using Disassembler.OMF;
 using System;
 using System.Collections.Generic;
@@ -8,33 +9,23 @@ namespace Disassembler
 {
 	public class ModuleMatch
 	{
-		private int iSegment = -1;
-		private CModule oModule = null;
-		private int iStart = 0;
-		private int iLength = 0;
+		private OBJModule oModule;
+		private uint uiLinearAddress;
+		private int iLength;
 
-		public ModuleMatch(int segment, CModule module, int start, int length)
+		public ModuleMatch(OBJModule module, uint address, int length)
 		{
-			this.iSegment = segment;
 			this.oModule = module;
-			this.iStart = start;
+			this.uiLinearAddress = address;
 			this.iLength = length;
 		}
 
-		public bool IsInRange(int address)
+		public bool IsInRange(uint address)
 		{
-			return this.iStart >= address || address < this.iStart + this.iLength;
+			return this.uiLinearAddress >= address || address < (uint)(this.uiLinearAddress + this.iLength);
 		}
-
-		public int Segment
-		{
-			get
-			{
-				return this.iSegment;
-			}
-		}
-
-		public CModule Module
+		
+		public OBJModule Module
 		{
 			get
 			{
@@ -42,12 +33,9 @@ namespace Disassembler
 			}
 		}
 
-		public int Start
+		public uint LinearAddress
 		{
-			get
-			{
-				return this.iStart;
-			}
+			get { return this.uiLinearAddress; }
 		}
 
 		public int Length

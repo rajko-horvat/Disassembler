@@ -13,7 +13,7 @@ namespace Disassembler.OMF
 
 		public DataRecord(Stream stream, List<SegmentDefinition> segments, bool iterated)
 		{
-			int iSegment = CModule.ReadByte(stream);
+			int iSegment = OBJModule.ReadByte(stream);
 			if (iSegment == 0)
 			{
 				throw new Exception("Data Record must have segment");
@@ -23,7 +23,7 @@ namespace Disassembler.OMF
 				this.oSegment = segments[iSegment - 1];
 			}
 
-			this.iOffset = CModule.ReadUInt16(stream);
+			this.iOffset = OBJModule.ReadUInt16(stream);
 
 			if (iterated)
 			{
@@ -32,20 +32,20 @@ namespace Disassembler.OMF
 			}
 			else
 			{
-				this.aData = CModule.ReadBlock(stream, (int)(stream.Length - stream.Position - 1));
+				this.aData = OBJModule.ReadBlock(stream, (int)(stream.Length - stream.Position - 1));
 			}
 		}
 
 		private byte[] RecursiveReadBlock(Stream stream, ref int level)
 		{
 			List<byte> buffer = new List<byte>();
-			int iRepeatCount = CModule.ReadUInt16(stream);
-			int iBlockCount = CModule.ReadUInt16(stream);
+			int iRepeatCount = OBJModule.ReadUInt16(stream);
+			int iBlockCount = OBJModule.ReadUInt16(stream);
 
 			if (iBlockCount == 0)
 			{
-				int iLength = CModule.ReadByte(stream);
-				buffer.AddRange(CModule.ReadBlock(stream, iLength));
+				int iLength = OBJModule.ReadByte(stream);
+				buffer.AddRange(OBJModule.ReadBlock(stream, iLength));
 			}
 			else
 			{

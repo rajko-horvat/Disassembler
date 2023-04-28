@@ -11,8 +11,8 @@ namespace Disassembler.OMF
 
 		public ExternalNameDefinition(Stream stream)
 		{
-			this.sName = CModule.ReadString(stream);
-			this.iTypeIndex = CModule.ReadByte(stream);
+			this.sName = OBJModule.ReadString(stream);
+			this.iTypeIndex = OBJModule.ReadByte(stream);
 		}
 
 		public string Name

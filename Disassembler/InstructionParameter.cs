@@ -34,7 +34,7 @@ namespace Disassembler
 		// default segment which memory access uses
 		private SegmentRegisterEnum eDefaultDataSegment = SegmentRegisterEnum.DS;
 		private SegmentRegisterEnum eDataSegment = SegmentRegisterEnum.DS;
-		private uint uiSegmentAddress = 0;
+		private ushort usSegment = 0;
 		private uint uiValue = 0;
 		private uint uiDisplacement = 0;
 
@@ -44,11 +44,11 @@ namespace Disassembler
 			this.uiValue = value;
 		}
 
-		public InstructionParameter(uint segmentAddress, uint value)
+		public InstructionParameter(ushort segment, uint offset)
 		{
 			this.eType = InstructionParameterTypeEnum.SegmentOffset;
-			this.uiSegmentAddress = segmentAddress;
-			this.uiValue = value;
+			this.usSegment = segment;
+			this.uiValue = offset;
 		}
 
 		public InstructionParameter(InstructionParameterTypeEnum type, InstructionSizeEnum size, uint value)
@@ -130,10 +130,10 @@ namespace Disassembler
 			set { this.eDataSegment = value; }
 		}
 
-		public uint SegmentAddress
+		public ushort Segment
 		{
-			get { return this.uiSegmentAddress; }
-			set { this.uiSegmentAddress = value; }
+			get { return this.usSegment; }
+			set { this.usSegment = value; }
 		}
 
 		public uint Value
@@ -173,7 +173,7 @@ namespace Disassembler
 					sb.Append(RelativeToString(this.uiValue, this.eSize));
 					break;
 				case InstructionParameterTypeEnum.SegmentOffset:
-					sb.AppendFormat("0x{0:x4}:0x{1:x4}", (ushort)this.uiSegmentAddress, (ushort)this.uiValue);
+					sb.AppendFormat("0x{0:x4}:0x{1:x4}", (ushort)this.usSegment, (ushort)this.uiValue);
 					break;
 				case InstructionParameterTypeEnum.Register:
 					switch (this.eSize)
@@ -203,7 +203,7 @@ namespace Disassembler
 						// print segment only if it's different from default segment
 						if (this.eDataSegment == SegmentRegisterEnum.Immediate)
 						{
-							sb.AppendFormat("0x{0}:", this.uiSegmentAddress);
+							sb.AppendFormat("0x{0}:", this.usSegment);
 						}
 						else
 						{
@@ -396,22 +396,44 @@ namespace Disassembler
 		{
 			if (this.Type == InstructionParameterTypeEnum.MemoryAddress)
 			{
-				return string.Format("this.oParent.CPU.Read{0}({1}, {2})",
+				return string.Format("this.oCPU.Read{0}({1}, {2})",
 					size.ToString(), GetSegmentText(), ToCSText(size));
 			}
 
 			return ToCSText(size);
 		}
 
+		public string ToSourceCSTextMZ(InstructionSizeEnum size)
+		{
+			if (this.Type == InstructionParameterTypeEnum.MemoryAddress)
+			{
+				return string.Format("this.oCPU.Read{0}({1}, {2})",
+					size.ToString(), GetSegmentTextMZ(), ToCSTextMZ(size));
+			}
+
+			return ToCSTextMZ(size);
+		}
+
 		public string ToDestinationCSText(InstructionSizeEnum size, string source)
 		{
 			if (this.Type == InstructionParameterTypeEnum.MemoryAddress)
 			{
-				return string.Format("this.oParent.CPU.Write{0}({1}, {2}, {3});",
+				return string.Format("this.oCPU.Write{0}({1}, {2}, {3});",
 					size.ToString(), GetSegmentText(), ToCSText(size), source);
 			}
 
 			return string.Format("{0} = {1};", ToCSText(size), source);
+		}
+
+		public string ToDestinationCSTextMZ(InstructionSizeEnum size, string source)
+		{
+			if (this.Type == InstructionParameterTypeEnum.MemoryAddress)
+			{
+				return string.Format("this.oCPU.Write{0}({1}, {2}, {3});",
+					size.ToString(), GetSegmentTextMZ(), ToCSTextMZ(size), source);
+			}
+
+			return string.Format("{0} = {1};", ToCSTextMZ(size), source);
 		}
 
 		public string GetSegmentText()
@@ -419,12 +441,26 @@ namespace Disassembler
 			switch (this.eDataSegment)
 			{
 				case SegmentRegisterEnum.Immediate:
-					return string.Format("0x{0:x}", this.uiSegmentAddress);
+					return string.Format("0x{0:x}", this.usSegment);
 				case SegmentRegisterEnum.ES:
 				case SegmentRegisterEnum.DS:
 					return string.Format("r{0}.Word", this.eDataSegment.ToString());
 				default:
-					return string.Format("this.oParent.CPU.{0}.Word", this.eDataSegment.ToString());
+					return string.Format("r{0}.Word", this.eDataSegment.ToString());
+			}
+		}
+
+		public string GetSegmentTextMZ()
+		{
+			switch (this.eDataSegment)
+			{
+				case SegmentRegisterEnum.Immediate:
+					return string.Format("0x{0:x}", this.usSegment);
+				case SegmentRegisterEnum.ES:
+				case SegmentRegisterEnum.DS:
+					return string.Format("this.oCPU.{0}.Word", this.eDataSegment.ToString());
+				default:
+					return string.Format("this.oCPU.{0}.Word", this.eDataSegment.ToString());
 			}
 		}
 
@@ -493,10 +529,10 @@ namespace Disassembler
 									sb.Append("rBX.Word");
 									break;
 								case RegisterEnum.SP:
-									sb.Append("this.oParent.CPU.SP.Word");
+									sb.Append("rSP.Word");
 									break;
 								case RegisterEnum.BP:
-									sb.Append("this.oParent.CPU.BP.Word");
+									sb.Append("rBP.Word");
 									break;
 								case RegisterEnum.SI:
 									sb.Append("rSI.Word");
@@ -526,10 +562,10 @@ namespace Disassembler
 									sb.Append("rBX.DWord");
 									break;
 								case RegisterEnum.SP:
-									sb.Append("this.oParent.CPU.SP.DWord");
+									sb.Append("rSP.DWord");
 									break;
 								case RegisterEnum.BP:
-									sb.Append("this.oParent.CPU.BP.DWord");
+									sb.Append("rBP.DWord");
 									break;
 								case RegisterEnum.SI:
 									sb.Append("rSI.DWord");
@@ -560,6 +596,9 @@ namespace Disassembler
 								case SegmentRegisterEnum.ES:
 									sb.Append("rES.Word");
 									break;
+								case SegmentRegisterEnum.CS:
+									sb.Append("this.oParent.CPU.CS.Word");
+									break;
 								case SegmentRegisterEnum.DS:
 									sb.Append("rDS.Word");
 									break;
@@ -577,11 +616,14 @@ namespace Disassembler
 								case SegmentRegisterEnum.ES:
 									sb.Append("rES.DWord");
 									break;
+								case SegmentRegisterEnum.CS:
+									sb.Append("rCS.DWord");
+									break;
 								case SegmentRegisterEnum.DS:
 									sb.Append("rDS.DWord");
 									break;
 								case SegmentRegisterEnum.SS:
-									sb.Append("this.oParent.CPU.SS.DWord");
+									sb.Append("rSS.DWord");
 									break;
 								default:
 									sb.Append("--");
@@ -604,10 +646,10 @@ namespace Disassembler
 							sb.Append("(ushort)(rBX.Word + rDI.Word)");
 							break;
 						case 2:
-							sb.Append("(ushort)(this.oParent.CPU.BP.Word + rSI.Word)");
+							sb.Append("(ushort)(rBP.Word + rSI.Word)");
 							break;
 						case 3:
-							sb.Append("(ushort)(this.oParent.CPU.BP.Word + rDI.Word)");
+							sb.Append("(ushort)(rBP.Word + rDI.Word)");
 							break;
 						case 4:
 							sb.Append("rSI.Word");
@@ -628,10 +670,10 @@ namespace Disassembler
 							sb.AppendFormat("(ushort)(rBX.Word + rDI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
 							break;
 						case 10:
-							sb.AppendFormat("(ushort)(this.oParent.CPU.BP.Word + rSI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							sb.AppendFormat("(ushort)(rBP.Word + rSI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
 							break;
 						case 11:
-							sb.AppendFormat("(ushort)(this.oParent.CPU.BP.Word + rDI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							sb.AppendFormat("(ushort)(rBP.Word + rDI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
 							break;
 						case 12:
 							sb.AppendFormat("(ushort)(rSI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
@@ -640,7 +682,7 @@ namespace Disassembler
 							sb.AppendFormat("(ushort)(rDI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
 							break;
 						case 14:
-							sb.AppendFormat("(ushort)(this.oParent.CPU.BP.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							sb.AppendFormat("(ushort)(rBP.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
 							break;
 						case 15:
 							sb.AppendFormat("(ushort)(rBX.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
@@ -652,10 +694,10 @@ namespace Disassembler
 							sb.AppendFormat("(ushort)(rBX.Word + rDI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
 							break;
 						case 18:
-							sb.AppendFormat("(ushort)(this.oParent.CPU.BP.Word + rSI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							sb.AppendFormat("(ushort)(rBP.Word + rSI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
 							break;
 						case 19:
-							sb.AppendFormat("(ushort)(this.oParent.CPU.BP.Word + rDI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							sb.AppendFormat("(ushort)(rBP.Word + rDI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
 							break;
 						case 20:
 							sb.AppendFormat("(ushort)(rSI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
@@ -664,10 +706,271 @@ namespace Disassembler
 							sb.AppendFormat("(ushort)(rDI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
 							break;
 						case 22:
-							sb.AppendFormat("(ushort)(this.oParent.CPU.BP.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							sb.AppendFormat("(ushort)(rBP.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
 							break;
 						case 23:
 							sb.AppendFormat("(ushort)(rBX.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							break;
+					}
+					break;
+				case InstructionParameterTypeEnum.FPUStackAddress:
+					sb.AppendFormat("ST({0})", this.uiValue);
+					break;
+				default:
+					sb.Append("--");
+					break;
+			}
+
+			return sb.ToString();
+		}
+
+		public string ToCSTextMZ(InstructionSizeEnum size)
+		{
+			StringBuilder sb = new StringBuilder();
+
+			RegisterEnum register;
+			SegmentRegisterEnum segmentRegister;
+
+			switch (this.eType)
+			{
+				case InstructionParameterTypeEnum.Immediate:
+					sb.AppendFormat("0x{0:x}", this.uiValue);
+					break;
+
+				case InstructionParameterTypeEnum.Register:
+					switch (size)
+					{
+						case InstructionSizeEnum.Byte:
+							register = (RegisterEnum)this.uiValue;
+							switch (register)
+							{
+								case RegisterEnum.AL:
+									sb.Append("this.oCPU.AX.Low");
+									break;
+								case RegisterEnum.CL:
+									sb.Append("this.oCPU.CX.Low");
+									break;
+								case RegisterEnum.DL:
+									sb.Append("this.oCPU.DX.Low");
+									break;
+								case RegisterEnum.BL:
+									sb.Append("this.oCPU.BX.Low");
+									break;
+								case RegisterEnum.AH:
+									sb.Append("this.oCPU.AX.High");
+									break;
+								case RegisterEnum.CH:
+									sb.Append("this.oCPU.CX.High");
+									break;
+								case RegisterEnum.DH:
+									sb.Append("this.oCPU.DX.High");
+									break;
+								case RegisterEnum.BH:
+									sb.Append("this.oCPU.BX.High");
+									break;
+								default:
+									sb.Append("--");
+									break;
+							}
+							break;
+						case InstructionSizeEnum.Word:
+							register = (RegisterEnum)(this.uiValue + 0x8);
+							switch (register)
+							{
+								case RegisterEnum.AX:
+									sb.Append("this.oCPU.AX.Word");
+									break;
+								case RegisterEnum.CX:
+									sb.Append("this.oCPU.CX.Word");
+									break;
+								case RegisterEnum.DX:
+									sb.Append("this.oCPU.DX.Word");
+									break;
+								case RegisterEnum.BX:
+									sb.Append("this.oCPU.BX.Word");
+									break;
+								case RegisterEnum.SP:
+									sb.Append("this.oCPU.SP.Word");
+									break;
+								case RegisterEnum.BP:
+									sb.Append("this.oCPU.BP.Word");
+									break;
+								case RegisterEnum.SI:
+									sb.Append("this.oCPU.SI.Word");
+									break;
+								case RegisterEnum.DI:
+									sb.Append("this.oCPU.DI.Word");
+									break;
+								default:
+									sb.Append("--");
+									break;
+							}
+							break;
+						case InstructionSizeEnum.DWord:
+							register = (RegisterEnum)(this.uiValue + 0x8);
+							switch (register)
+							{
+								case RegisterEnum.AX:
+									sb.Append("this.oCPU.AX.DWord");
+									break;
+								case RegisterEnum.CX:
+									sb.Append("this.oCPU.CX.DWord");
+									break;
+								case RegisterEnum.DX:
+									sb.Append("this.oCPU.DX.DWord");
+									break;
+								case RegisterEnum.BX:
+									sb.Append("this.oCPU.BX.DWord");
+									break;
+								case RegisterEnum.SP:
+									sb.Append("this.oCPU.SP.DWord");
+									break;
+								case RegisterEnum.BP:
+									sb.Append("this.oCPU.BP.DWord");
+									break;
+								case RegisterEnum.SI:
+									sb.Append("this.oCPU.SI.DWord");
+									break;
+								case RegisterEnum.DI:
+									sb.Append("this.oCPU.DI.DWord");
+									break;
+								default:
+									sb.Append("--");
+									break;
+							}
+							break;
+						default:
+							sb.Append("--");
+							break;
+					}
+					break;
+				case InstructionParameterTypeEnum.SegmentRegister:
+					segmentRegister = (SegmentRegisterEnum)this.uiValue;
+					switch (size)
+					{
+						case InstructionSizeEnum.Byte:
+							sb.Append("--");
+							break;
+						case InstructionSizeEnum.Word:
+							switch (segmentRegister)
+							{
+								case SegmentRegisterEnum.ES:
+									sb.Append("this.oCPU.ES.Word");
+									break;
+								case SegmentRegisterEnum.CS:
+									sb.Append("this.oCPU.CS.Word");
+									break;
+								case SegmentRegisterEnum.DS:
+									sb.Append("this.oCPU.DS.Word");
+									break;
+								case SegmentRegisterEnum.SS:
+									sb.Append("this.oCPU.SS.Word");
+									break;
+								default:
+									sb.Append("--");
+									break;
+							}
+							break;
+						case InstructionSizeEnum.DWord:
+							switch (segmentRegister)
+							{
+								case SegmentRegisterEnum.ES:
+									sb.Append("this.oCPU.ES.DWord");
+									break;
+								case SegmentRegisterEnum.CS:
+									sb.Append("this.oCPU.CS.DWord");
+									break;
+								case SegmentRegisterEnum.DS:
+									sb.Append("this.oCPU.DS.DWord");
+									break;
+								case SegmentRegisterEnum.SS:
+									sb.Append("this.oCPU.SS.DWord");
+									break;
+								default:
+									sb.Append("--");
+									break;
+							}
+							break;
+					}
+					break;
+				case InstructionParameterTypeEnum.MemoryAddress:
+				case InstructionParameterTypeEnum.LEAMemoryAddress:
+					if (this.eSize == InstructionSizeEnum.DWord)
+						throw new Exception("x32 addressing mode not yet implemented");
+
+					switch (this.uiValue)
+					{
+						case 0:
+							sb.Append("(ushort)(this.oCPU.BX.Word + this.oCPU.SI.Word)");
+							break;
+						case 1:
+							sb.Append("(ushort)(this.oCPU.BX.Word + this.oCPU.DI.Word)");
+							break;
+						case 2:
+							sb.Append("(ushort)(this.oCPU.BP.Word + this.oCPU.SI.Word)");
+							break;
+						case 3:
+							sb.Append("(ushort)(this.oCPU.BP.Word + this.oCPU.DI.Word)");
+							break;
+						case 4:
+							sb.Append("this.oCPU.SI.Word");
+							break;
+						case 5:
+							sb.Append("this.oCPU.DI.Word");
+							break;
+						case 6:
+							sb.AppendFormat("0x{0:x}", this.uiDisplacement);
+							break;
+						case 7:
+							sb.Append("this.oCPU.BX.Word");
+							break;
+						case 8:
+							sb.AppendFormat("(ushort)(this.oCPU.BX.Word + this.oCPU.SI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							break;
+						case 9:
+							sb.AppendFormat("(ushort)(this.oCPU.BX.Word + this.oCPU.DI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							break;
+						case 10:
+							sb.AppendFormat("(ushort)(this.oCPU.BP.Word + this.oCPU.SI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							break;
+						case 11:
+							sb.AppendFormat("(ushort)(this.oCPU.BP.Word + this.oCPU.DI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							break;
+						case 12:
+							sb.AppendFormat("(ushort)(this.oCPU.SI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							break;
+						case 13:
+							sb.AppendFormat("(ushort)(this.oCPU.DI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							break;
+						case 14:
+							sb.AppendFormat("(ushort)(this.oCPU.BP.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							break;
+						case 15:
+							sb.AppendFormat("(ushort)(this.oCPU.BX.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Byte));
+							break;
+						case 16:
+							sb.AppendFormat("(ushort)(this.oCPU.BX.Word + this.oCPU.SI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							break;
+						case 17:
+							sb.AppendFormat("(ushort)(this.oCPU.BX.Word + this.oCPU.DI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							break;
+						case 18:
+							sb.AppendFormat("(ushort)(this.oCPU.BP.Word + this.oCPU.SI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							break;
+						case 19:
+							sb.AppendFormat("(ushort)(this.oCPU.BP.Word + this.oCPU.DI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							break;
+						case 20:
+							sb.AppendFormat("(ushort)(this.oCPU.SI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							break;
+						case 21:
+							sb.AppendFormat("(ushort)(this.oCPU.DI.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							break;
+						case 22:
+							sb.AppendFormat("(ushort)(this.oCPU.BP.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
+							break;
+						case 23:
+							sb.AppendFormat("(ushort)(this.oCPU.BX.Word {0})", RelativeToString(this.uiDisplacement, InstructionSizeEnum.Word));
 							break;
 					}
 					break;

@@ -84,16 +84,16 @@ namespace Disassembler.OMF
 
 		public Fixup(Stream stream)
 		{
-			int iType = CModule.ReadByte(stream);
+			int iType = OBJModule.ReadByte(stream);
 			if ((iType & 0x80) != 0)
 			{
 				// it's a Fixup subrecord
 				this.eType = FixupTypeEnum.Fixup;
 				this.eFixupMode = (FixupModeEnum)((iType & 0x40) >> 6);
 				this.eFixupLocationType = (FixupLocationTypeEnum)((iType & 0x3c) >> 2);
-				this.iDataOffset = ((iType & 0x3) << 8) | CModule.ReadByte(stream);
+				this.iDataOffset = ((iType & 0x3) << 8) | OBJModule.ReadByte(stream);
 
-				iType = CModule.ReadByte(stream);
+				iType = OBJModule.ReadByte(stream);
 
 				if ((iType & 0x80) != 0)
 				{
@@ -104,7 +104,7 @@ namespace Disassembler.OMF
 					this.eFrameMethod = (FrameMethodEnum)((iType & 0x70) >> 4);
 					if ((int)this.eFrameMethod < 3)
 					{
-						this.iFrameThreadIndex = CModule.ReadByte(stream);
+						this.iFrameThreadIndex = OBJModule.ReadByte(stream);
 					}
 				}
 
@@ -115,10 +115,10 @@ namespace Disassembler.OMF
 				else
 				{
 					this.eTargetMethod = (TargetMethodEnum)(iType & 0x3);
-					this.iTargetThreadIndex = CModule.ReadByte(stream);
+					this.iTargetThreadIndex = OBJModule.ReadByte(stream);
 					if ((iType & 0x4) == 0)
 					{
-						this.iTargetDisplacement = CModule.ReadUInt16(stream);
+						this.iTargetDisplacement = OBJModule.ReadUInt16(stream);
 					}
 				}
 			}
@@ -136,7 +136,7 @@ namespace Disassembler.OMF
 						case FrameMethodEnum.SegDefIndex:
 						case FrameMethodEnum.GrpDefIndex:
 						case FrameMethodEnum.ExtDefIndex:
-							this.iIndex = CModule.ReadByte(stream);
+							this.iIndex = OBJModule.ReadByte(stream);
 							break;
 					}
 				}
@@ -145,7 +145,7 @@ namespace Disassembler.OMF
 					this.eType = FixupTypeEnum.TargetThread;
 					this.eTargetMethod = (TargetMethodEnum)((iType & 0x1c) >> 2);
 					this.iThreadIndex = iType & 0x3;
-					this.iIndex = CModule.ReadByte(stream);
+					this.iIndex = OBJModule.ReadByte(stream);
 				}
 			}
 		}

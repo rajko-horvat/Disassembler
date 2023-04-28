@@ -37,11 +37,10 @@ namespace Disassembler.OMF
 		private string sName = null;
 		private string sClassName = null;
 		private string sOverlayName = null;
-		private List<Fixup> aFixups = new List<Fixup>();
 
 		public SegmentDefinition(Stream stream, List<string> names)
 		{
-			byte bAttributes = CModule.ReadByte(stream);
+			byte bAttributes = OBJModule.ReadByte(stream);
 			byte bAlign = (byte)((bAttributes & 0xe0) >> 5);
 			byte bComb = (byte)((bAttributes & 0x1c) >> 2);
 			this.bBig = (bAttributes & 0x2) != 0;
@@ -51,8 +50,8 @@ namespace Disassembler.OMF
 			if (this.eAlignment == SegmentAlignmentEnum.Absolute)
 			{
 				// read additional Frame number and Offset
-				this.iFrameNumber = CModule.ReadUInt16(stream);
-				this.iOffset = CModule.ReadByte(stream);
+				this.iFrameNumber = OBJModule.ReadUInt16(stream);
+				this.iOffset = OBJModule.ReadByte(stream);
 			}
 			switch (bComb)
 			{
@@ -81,10 +80,10 @@ namespace Disassembler.OMF
 					this.eCombine = SegmentCombineEnum.Public;
 					break;
 			}
-			this.iLength = CModule.ReadUInt16(stream);
-			int iNameIndex = CModule.ReadByte(stream);
-			int iClassNameIndex = CModule.ReadByte(stream);
-			int iOverlayIndex = CModule.ReadByte(stream);
+			this.iLength = OBJModule.ReadUInt16(stream);
+			int iNameIndex = OBJModule.ReadByte(stream);
+			int iClassNameIndex = OBJModule.ReadByte(stream);
+			int iOverlayIndex = OBJModule.ReadByte(stream);
 
 			if (iNameIndex > 0)
 			{
@@ -172,18 +171,6 @@ namespace Disassembler.OMF
 			get
 			{
 				return this.sOverlayName;
-			}
-		}
-
-		public List<Fixup> Fixups
-		{
-			get
-			{
-				return this.aFixups;
-			}
-			set
-			{
-				this.aFixups = value;
 			}
 		}
 	}

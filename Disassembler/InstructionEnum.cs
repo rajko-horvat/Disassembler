@@ -200,6 +200,7 @@ namespace Disassembler
 		CallFunction,
 		If,
 		IfAnd,
-		IfOr
+		IfOr,
+		CallOverlay
 	}
 }

@@ -5,7 +5,9 @@ using Disassembler.MZ;
 using Disassembler.NE;
 using Disassembler.OMF;
 using IRB.Collections.Generic;
+using System.Data.Common;
 using System.Reflection;
+using System.Reflection.Metadata;
 
 internal class Program
 {
@@ -21,28 +23,30 @@ internal class Program
 
 		//MakeTable();
 
+		//UnpackDOSEXE(@"..\..\..\..\Game\Dos\Installed\civ.bak");
+
 		ParseDOSEXE(path);
 
-		ParseWinEXE(path);
+		//ParseWinEXE(path);
 	}
 
-	private static void DecodeDOSEXE(string path)
+	private static void UnpackDOSEXE(string path)
 	{
-		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\civ.exe");
+		MZExecutable mzEXE = new MZExecutable(path);
 		ushort usSegment1 = 0x5409;
 		ushort usSegment2 = 0x1234;
 
 		CPURegisters oRegisters1 = new CPURegisters();
-		Memory oMemory1 = DecodeEXE(mzEXE, usSegment1, oRegisters1);
+		Memory oMemory1 = UnpackEXE(mzEXE, usSegment1, oRegisters1);
 
 		CPURegisters oRegisters2 = new CPURegisters();
-		Memory oMemory2 = DecodeEXE(mzEXE, usSegment2, oRegisters2);
+		Memory oMemory2 = UnpackEXE(mzEXE, usSegment2, oRegisters2);
 
 		byte[] buffer1 = oMemory1.Blocks[3].Data;
 		byte[] buffer2 = oMemory2.Blocks[3].Data;
 		int iLength1 = buffer1.Length;
 		int iLength2 = buffer1.Length;
-		int iLastEmptyByte = iLength1 - 1;
+		uint uiLastEmptyByte = (uint)(iLength1 - 1);
 
 		if (iLength1 != iLength2)
 			throw new Exception("Blocks are of different size");
@@ -51,23 +55,23 @@ internal class Program
 		{
 			if (buffer1[i] != 0 || buffer2[i] != 0)
 			{
-				iLastEmptyByte = i + 1;
+				uiLastEmptyByte = (uint)(i + 1);
 				break;
 			}
 		}
 
-		Console.WriteLine("Last empty byte in the last block: 0x{0:x8}", iLastEmptyByte);
-		MemoryRegion.AlignBlock(ref iLastEmptyByte); // we want this to be aligned
+		Console.WriteLine("Last empty byte in the last block: 0x{0:x8}", uiLastEmptyByte);
+		MemoryRegion.AlignBlock(ref uiLastEmptyByte); // we want this to be aligned
 
 		Console.WriteLine("Joining the blocks");
 		iLength1 = oMemory1.Blocks[2].Data.Length;
-		iLength2 = oMemory2.Blocks[2].Data.Length + iLastEmptyByte;
+		iLength2 = (int)(oMemory2.Blocks[2].Data.Length + uiLastEmptyByte);
 		oMemory1.Blocks[2].Resize(iLength2);
 		oMemory2.Blocks[2].Resize(iLength2);
 
-		Array.Copy(oMemory1.Blocks[3].Data, 0, oMemory1.Blocks[2].Data, iLength1, iLastEmptyByte);
+		Array.Copy(oMemory1.Blocks[3].Data, 0, oMemory1.Blocks[2].Data, iLength1, uiLastEmptyByte);
 		oMemory1.Blocks.RemoveAt(3);
-		Array.Copy(oMemory2.Blocks[3].Data, 0, oMemory2.Blocks[2].Data, iLength1, iLastEmptyByte);
+		Array.Copy(oMemory2.Blocks[3].Data, 0, oMemory2.Blocks[2].Data, iLength1, uiLastEmptyByte);
 		oMemory2.Blocks.RemoveAt(3);
 
 		buffer1 = oMemory1.Blocks[2].Data;
@@ -83,13 +87,13 @@ internal class Program
 		writer.Close();*/
 
 		// decrease minimum allocation by additional size that was added to EXE
-		mzEXE.MinimumAllocation -= iLastEmptyByte >> 4;
+		mzEXE.MinimumAllocation -= (ushort)(uiLastEmptyByte >> 4);
 
 		CompareBlocksAndReconstructEXE(mzEXE, buffer1, buffer2, usSegment1, usSegment2);
-		mzEXE.InitialSS = oRegisters1.SS.Word - usSegment1;
+		mzEXE.InitialSS = (ushort)(oRegisters1.SS.Word - usSegment1);
 		mzEXE.InitialSP = oRegisters1.SP.Word;
 		mzEXE.InitialIP = oRegisters1.IP.Word;
-		mzEXE.InitialCS = oRegisters1.CS.Word - usSegment1; // - 0x10; // account for PSP (0x10)
+		mzEXE.InitialCS = (ushort)(oRegisters1.CS.Word - usSegment1); // - 0x10; // account for PSP (0x10)
 
 		Console.WriteLine("Block validation passed");
 
@@ -100,13 +104,180 @@ internal class Program
 
 	private static void ParseDOSEXE(string path)
 	{
+		ushort usSegmentOffset = 0x1000;
 		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\civ.exe");
 
+		mzEXE.ApplyRelocations(usSegmentOffset);
+
 		Library oLibrary1 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\MLIBC7.lib");
+
+		// unique set of segment names
+		BHashSet<string> aSegmentNames = new BHashSet<string>();
+		BHashSet<string> aGroupNames = new BHashSet<string>();
+
+		for (int i = 0; i < oLibrary1.Modules.Count; i++)
+		{
+			OBJModule module = oLibrary1.Modules[i];
+
+			for (int j = 0; j < module.DataRecords.Count; j++)
+			{
+				DataRecord data = module.DataRecords[j];
+				aSegmentNames.Add(data.Segment.Name);
+			}
+
+			for (int j = 0; j < module.SegmentGroups.Count; j++)
+			{
+				SegmentGroupDefinition group = module.SegmentGroups[j];
+				aGroupNames.Add(group.Name);
+			}
+		}
+
+		Console.WriteLine("Used segment names:");
+		for (int i = 0; i < aSegmentNames.Count; i++)
+		{
+			Console.WriteLine(aSegmentNames[i]);
+		}
+
+		Console.WriteLine("Group names:");
+		for (int i = 0; i < aGroupNames.Count; i++)
+		{
+			Console.WriteLine(aGroupNames[i]);
+		}
 
 		List<ModuleMatch> aMatches = new List<ModuleMatch>();
 		Console.WriteLine("Matching MLIBC7");
 		MatchLibraryToEXE(oLibrary1, mzEXE, aMatches);
+
+		MZDecompiler oDecompiler = new MZDecompiler(mzEXE, aMatches);
+
+		Console.WriteLine("Decompiling");
+
+		// we start by decompiling Start function
+		oDecompiler.Decompile("Start", CallTypeEnum.Undefined, new List<CParameter>(), CType.Word,
+			0, (ushort)(mzEXE.InitialCS + usSegmentOffset), mzEXE.InitialIP, (uint)usSegmentOffset << 4);
+
+		// emit generated code
+		StreamWriter writer = new StreamWriter("Out\\Code\\Objects.cs");
+		StreamWriter writer1 = new StreamWriter("Out\\Code\\Inits.cs");
+		StreamWriter writer2 = new StreamWriter("Out\\Code\\Getters.cs");
+
+		// emit segments
+		BDictionary<int, List<MZFunction>> oSegments = new BDictionary<int, List<MZFunction>>();
+		for (int i = 0; i < oDecompiler.GlobalNamespace.Functions.Count; i++)
+		{
+			MZFunction function = oDecompiler.GlobalNamespace.Functions[i].Value;
+			if (function.Overlay == 0)
+			{
+				if (oSegments.ContainsKey(function.Segment))
+				{
+					oSegments.GetValueByKey(function.Segment).Add(function);
+				}
+				else
+				{
+					oSegments.Add(function.Segment, new List<MZFunction>());
+					oSegments.GetValueByKey(function.Segment).Add(function);
+				}
+			}
+		}
+
+		for (int i = 0; i < oSegments.Count; i++)
+		{
+			oDecompiler.WriteCode($"Out\\Code\\Segment_{oSegments[i].Key:x}.cs", oSegments[i].Value);
+			writer.WriteLine($"private Segment_{oSegments[i].Key:x} oSegment_{oSegments[i].Key:x};");
+			writer1.WriteLine($"this.oSegment_{oSegments[i].Key:x} = new Segment_{oSegments[i].Key:x}(this);");
+			writer2.WriteLine($"public Segment_{oSegments[i].Key:x} Segment_{oSegments[i].Key:x}");
+			writer2.WriteLine("{");
+			writer2.WriteLine($"\tget {{ return this.oSegment_{oSegments[i].Key:x};}}");
+			writer2.WriteLine("}");
+			writer2.WriteLine();
+		}
+
+		// emit overlays
+		oSegments.Clear();
+		for (int i = 0; i < oDecompiler.GlobalNamespace.Functions.Count; i++)
+		{
+			MZFunction function = oDecompiler.GlobalNamespace.Functions[i].Value;
+			if (function.Overlay > 0)
+			{
+				if (oSegments.ContainsKey(function.Overlay))
+				{
+					oSegments.GetValueByKey(function.Overlay).Add(function);
+				}
+				else
+				{
+					oSegments.Add(function.Overlay, new List<MZFunction>());
+					oSegments.GetValueByKey(function.Overlay).Add(function);
+				}
+			}
+		}
+
+		for (int i = 0; i < oSegments.Count; i++)
+		{
+			oDecompiler.WriteCode($"Out\\Code\\Overlay_{oSegments[i].Key}.cs", oSegments[i].Value);
+			writer.WriteLine($"private Overlay_{oSegments[i].Key} oOverlay_{oSegments[i].Key};");
+			writer1.WriteLine($"this.oOverlay_{oSegments[i].Key} = new Overlay_{oSegments[i].Key}(this);");
+			writer2.WriteLine($"public Overlay_{oSegments[i].Key} Overlay_{oSegments[i].Key}");
+			writer2.WriteLine("{");
+			writer2.WriteLine($"\tget {{ return this.oOverlay_{oSegments[i].Key};}}");
+			writer2.WriteLine("}");
+			writer2.WriteLine();
+		}
+
+		// emit API functions
+		List<MZFunction> aFunctions = new List<MZFunction>();
+
+		for (int i = 0; i < oDecompiler.GlobalNamespace.APIFunctions.Count; i++)
+		{
+			aFunctions.Add(oDecompiler.GlobalNamespace.APIFunctions[i].Value);
+		}
+
+		oDecompiler.WriteCode(@"Out\Code\MSCAPI.cs", aFunctions);
+		writer.WriteLine("private MSCAPI oMSCAPI;");
+		writer1.WriteLine("this.oMSCAPI = new MSCAPI(this);");
+		writer2.WriteLine("public MSCAPI MSCAPI");
+		writer2.WriteLine("{");
+		writer2.WriteLine("\tget { return this.oMSCAPI;}");
+		writer2.WriteLine("}");
+
+		// process misc.exe
+		MZExecutable miscEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\misc.exe");
+		MZDecompiler oMiscDecompiler = new MZDecompiler(miscEXE, aMatches);
+		MemoryStream reader = new MemoryStream(miscEXE.Data);
+
+		reader.Position = 0x30;
+		ushort usCount = MZExecutable.ReadUInt16(reader);
+		ushort[] aOffsets = new ushort[usCount];
+
+		for (int i = 0; i < usCount; i++)
+		{
+			aOffsets[i] = MZExecutable.ReadUInt16(reader);
+		}
+		reader.Close();
+
+		for (int i = 0; i < usCount; i++)
+		{
+			oMiscDecompiler.Decompile($"F0_0000_{aOffsets[i]:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Word, 0, 0, aOffsets[i], 0);
+		}
+
+		// Emit Misc functions
+		aFunctions = new List<MZFunction>();
+		for (int i = 0; i < oMiscDecompiler.GlobalNamespace.Functions.Count; i++)
+		{
+			aFunctions.Add(oMiscDecompiler.GlobalNamespace.Functions[i].Value);
+		}
+
+		oMiscDecompiler.WriteCode(@"Out\Code\Misc.cs", aFunctions);
+		writer.WriteLine("private Misc Misc;");
+		writer1.WriteLine("this.oMisc = new Misc(this);");
+		writer2.WriteLine("public Misc Misc");
+		writer2.WriteLine("{");
+		writer2.WriteLine("\tget { return this.oMisc;}");
+		writer2.WriteLine("}");
+
+
+		writer2.Close();
+		writer1.Close();
+		writer.Close();
 
 		Console.WriteLine("Finished DOS processing");
 	}
@@ -148,7 +319,7 @@ internal class Program
 					block1[i + 1] = (byte)((usWord1 & 0xff00) >> 8);
 					block2[i] = (byte)(usWord2 & 0xff);
 					block2[i + 1] = (byte)((usWord2 & 0xff00) >> 8);
-					exe.Relocations.Add(new MZRelocationItem(iSegment, iOffset));
+					exe.Relocations.Add(new MZRelocationItem((ushort)iSegment, (ushort)iOffset));
 					iOffset++;
 					i++;
 				}
@@ -170,13 +341,13 @@ internal class Program
 		Array.Copy(block1, exe.Data, block1.Length);
 	}
 
-	private static Memory DecodeEXE(MZExecutable exe, ushort startSegment, CPURegisters r)
+	private static Memory UnpackEXE(MZExecutable exe, ushort startSegment, CPURegisters r)
 	{
 		Memory oMemory = new Memory();
 		ushort usPSPSegment;
 		ushort usMZSegment;
 		ushort usDataSegment;
-		int uiMZEXELength = exe.Data.Length;
+		uint uiMZEXELength = (uint)exe.Data.Length;
 		MemoryRegion.AlignBlock(ref uiMZEXELength);
 
 		if (startSegment < 0x10)
@@ -191,7 +362,7 @@ internal class Program
 		oMemory.MemoryRegions.Add(new MemoryRegion(usPSPSegment, 0x100, MemoryFlagsEnum.None));
 
 		// EXE segment
-		oMemory.AllocateBlock(uiMZEXELength, out usMZSegment);
+		oMemory.AllocateBlock((int)uiMZEXELength, out usMZSegment);
 		oMemory.WriteBlock(usMZSegment, 0, exe.Data, 0, exe.Data.Length);
 
 		// data segment
@@ -249,8 +420,8 @@ internal class Program
 		// 2b0d:002D	mov ax, 32h; push ax
 		// 2b0d:0031	retf
 
-		oMemory.WriteWord(r.SS.Word, (ushort)(r.SP.Word - 2), r.AX.Word);
-		oMemory.WriteWord(r.SS.Word, (ushort)(r.SP.Word - 4), 0x32);
+		//oMemory.WriteWord(r.SS.Word, (ushort)(r.SP.Word - 2), r.AX.Word);
+		//oMemory.WriteWord(r.SS.Word, (ushort)(r.SP.Word - 4), 0x32);
 		r.CS.Word = r.AX.Word;
 		r.IP.Word = 0x32;
 
@@ -561,7 +732,7 @@ internal class Program
 	private static void ParseWinEXE(string path)
 	{
 		// load libraries and modules
-		CModule oModule = new CModule(@"..\..\..\..\Compilers\Borland\Installed1\BORLANDC\LIB\C0WL.obj");
+		OBJModule oModule = new OBJModule(@"..\..\..\..\Compilers\Borland\Installed1\BORLANDC\LIB\C0WL.obj");
 		Library oLibrary1 = new Library(@"..\..\..\..\Compilers\Borland\Installed1\BORLANDC\LIB\CWL.lib");
 		Library oLibrary2 = new Library(@"..\..\..\..\Compilers\Borland\Installed1\BORLANDC\LIB\MATHWL.lib");
 
@@ -856,8 +1027,8 @@ internal class Program
 		// find WINMAIN entry
 		string sWinMain = "winmain";
 		int iWinMainIndex = -1;
-		uint uiWinMainOffset = 0;
-		uint uiWinMainSegment = 0;
+		ushort usWinMainOffset = 0;
+		ushort usWinMainSegment = 0;
 
 		for (int i = 0; i < oModule.ExternalNames.Count; i++)
 		{
@@ -878,11 +1049,11 @@ internal class Program
 					fixup.TargetThreadIndex == iWinMainIndex &&
 					fixup.TargetMethod == TargetMethodEnum.ExtDefIndex)
 				{
-					uiWinMainOffset = (uint)fixup.DataOffset;
+					usWinMainOffset = (ushort)fixup.DataOffset;
 					break;
 				}
 			}
-			if (uiWinMainOffset >= 0)
+			if (usWinMainOffset >= 0)
 				break;
 		}
 
@@ -890,23 +1061,22 @@ internal class Program
 		{
 			if (aMatches[i].Module.Name.Equals(oModule.Name))
 			{
-				int iStart = aMatches[i].Start;
+				uint uiAddress = aMatches[i].LinearAddress;
 				int iLength = aMatches[i].Length;
-				int iSegment = aMatches[i].Segment;
-				Segment segment = exe.Segments[iSegment];
+				Segment segment = exe.Segments[0];
 
 				for (int j = 0; j < segment.Relocations.Count; j++)
 				{
 					Relocation relocation = segment.Relocations[j];
 
-					if (relocation.Offset >= iStart && relocation.Offset + relocation.Length <= iStart + iLength)
+					if (relocation.Offset >= uiAddress && relocation.Offset + relocation.Length <= uiAddress + iLength)
 					{
 						// relocation is within module range
 						if (relocation.LocationType == LocationTypeEnum.SegmentOffset32 &&
-							relocation.Offset - iStart == uiWinMainOffset)
+							relocation.Offset - uiAddress == usWinMainOffset)
 						{
-							uiWinMainSegment = (uint)relocation.Parameter1 - 1;
-							uiWinMainOffset = (uint)relocation.Parameter2;
+							usWinMainSegment = (ushort)(relocation.Parameter1 - 1);
+							usWinMainOffset = (ushort)relocation.Parameter2;
 							break;
 						}
 					}
@@ -915,7 +1085,7 @@ internal class Program
 			}
 		}
 
-		if (uiWinMainOffset >= 0 && uiWinMainSegment >= 0)
+		if (usWinMainOffset >= 0 && usWinMainSegment >= 0)
 		{
 			// and now we have entry to our winmain procedure...
 			// create decompiler and it's context
@@ -928,14 +1098,14 @@ internal class Program
 			aParameters.Add(new CParameter(CType.Int, "nCmdShow"));
 
 			// we start by decompiling WinMain function
-			oDecompiler.Decompile("WinMain", CallTypeEnum.Undefined, aParameters, CType.Word, uiWinMainSegment, uiWinMainOffset);
+			oDecompiler.Decompile("WinMain", CallTypeEnum.Undefined, aParameters, CType.Word, usWinMainSegment, usWinMainOffset);
 
 			// decompile exports
 			for (int i = 0; i < exe.Entries.Count; i++)
 			{
 				Entry entry = exe.Entries[i];
 				oDecompiler.Decompile(string.Format("F{0}_{1:x}", (uint)entry.Segment - 1, (uint)entry.Offset),
-					CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, (uint)entry.Segment - 1, (uint)entry.Offset);
+					CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, (ushort)(entry.Segment - 1), (ushort)entry.Offset);
 			}
 
 			// decompile unreferenced function, referenced by data segment
@@ -1050,7 +1220,7 @@ internal class Program
 
 							if (instruction.Label)
 							{
-								writer.WriteLine("\t\tL{0:x4}:", instruction.Location.Offset);
+								writer.WriteLine("\t\tL{0:x8}:", instruction.LinearAddress);
 							}
 
 							uint uiOffset = 0;
@@ -1093,7 +1263,7 @@ internal class Program
 									parameter = instruction.Parameters[0];
 									if (parameter.Type == InstructionParameterTypeEnum.SegmentOffset)
 									{
-										CFunction function1 = oDecompiler.GetFunction(parameter.SegmentAddress, parameter.Value);
+										CFunction function1 = oDecompiler.GetFunction(parameter.Segment, (ushort)(parameter.Value & 0xffff));
 										if (function1.Segment == 0)
 										{
 											writer.WriteLine("\t\t\tthis.oParent.{0}.{1}();", "CAPI", function1.Name.Replace("@", ""));
@@ -1170,19 +1340,19 @@ internal class Program
 											if ((instruction.Bytes[1] & 0x38) == 0)
 											{
 												writer.WriteLine("\t\t\tthis.oParent.CPU.FILD16({0}, {1});",
-													(parameter.DataSegment == SegmentRegisterEnum.Immediate) ? string.Format("0x{0:x}", parameter.SegmentAddress) : string.Format("this.oParent.CPU.{0}.Word", parameter.DataSegment.ToString()),
+													(parameter.DataSegment == SegmentRegisterEnum.Immediate) ? string.Format("0x{0:x}", parameter.Segment) : string.Format("this.oParent.CPU.{0}.Word", parameter.DataSegment.ToString()),
 													parameter.ToCSText(instruction.OperandSize));
 											}
 											else
 											{
 												writer.WriteLine("\t\t\tthis.oParent.CPU.FILD64({0}, {1});",
-													(parameter.DataSegment == SegmentRegisterEnum.Immediate) ? string.Format("0x{0:x}", parameter.SegmentAddress) : string.Format("this.oParent.CPU.{0}.Word", parameter.DataSegment.ToString()),
+													(parameter.DataSegment == SegmentRegisterEnum.Immediate) ? string.Format("0x{0:x}", parameter.Segment) : string.Format("this.oParent.CPU.{0}.Word", parameter.DataSegment.ToString()),
 													parameter.ToCSText(instruction.OperandSize));
 											}
 											break;
 										case 0xdb:
 											writer.WriteLine("\t\t\tthis.oParent.CPU.FILD32({0}, {1});",
-												(parameter.DataSegment == SegmentRegisterEnum.Immediate) ? string.Format("0x{0:x}", parameter.SegmentAddress) : string.Format("this.oParent.CPU.{0}.Word", parameter.DataSegment.ToString()),
+												(parameter.DataSegment == SegmentRegisterEnum.Immediate) ? string.Format("0x{0:x}", parameter.Segment) : string.Format("this.oParent.CPU.{0}.Word", parameter.DataSegment.ToString()),
 												parameter.ToCSText(instruction.OperandSize));
 											break;
 									}
@@ -1396,21 +1566,20 @@ internal class Program
 										instruction1.InstructionType != InstructionEnum.SUB &&
 										instruction1.InstructionType != InstructionEnum.ADD))
 									{
-										Console.WriteLine("Found conditional jump at {0}:0x{1:x}, instruction {2}, previous: {3}",
-											instruction.Location.Segment, instruction.Location.Offset,
-											instruction.ToString(), instruction1.ToString());
+										Console.WriteLine("Found conditional jump at 0x{1:x8}, instruction {2}, previous: {3}",
+											instruction.LinearAddress, instruction.ToString(), instruction1.ToString());
 									}
 
-									uiOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[1].Value) & 0xffff;
+									uiOffset = (instruction.LinearAddress + (uint)instruction.Bytes.Count + instruction.Parameters[1].Value) & 0xffff;
 									writer.WriteLine("\t\t\tif (this.oParent.CPU.Flags.{0}) goto L{1:x4};",
 										((ConditionEnum)instruction.Parameters[0].Value).ToString(), uiOffset);
 									break;
 								case InstructionEnum.JMP:
-									uiOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
+									uiOffset = (instruction.LinearAddress + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
 									writer.WriteLine("\t\t\tgoto L{0:x4};", uiOffset);
 									break;
 								case InstructionEnum.LOOP:
-									uiOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
+									uiOffset = (instruction.LinearAddress + (uint)instruction.Bytes.Count + instruction.Parameters[0].Value) & 0xffff;
 									writer.WriteLine("\t\t\tif (this.oParent.CPU.Loop(rCX)) goto L{0:x4};", uiOffset);
 									break;
 								case InstructionEnum.RETF:
@@ -1426,7 +1595,7 @@ internal class Program
 										writer.WriteLine("\t\t\treturn;");
 									break;
 								case InstructionEnum.If:
-									uiOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[3].Value) & 0xffff;
+									uiOffset = (instruction.LinearAddress + (uint)instruction.Bytes.Count + instruction.Parameters[3].Value) & 0xffff;
 									writer.WriteLine("\t\t\tif ({0} {1} {2}) goto L{3:x4};",
 										instruction.Parameters[0].ToSourceCSText(instruction.Parameters[0].Size),
 										ConditionToCSText((ConditionEnum)instruction.Parameters[2].Value),
@@ -1434,7 +1603,7 @@ internal class Program
 										uiOffset);
 									break;
 								case InstructionEnum.IfAnd:
-									uiOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[3].Value) & 0xffff;
+									uiOffset = (instruction.LinearAddress + (uint)instruction.Bytes.Count + instruction.Parameters[3].Value) & 0xffff;
 									writer.WriteLine("\t\t\tif (({0} & {2}) {1} 0) goto L{3:x4};",
 										instruction.Parameters[0].ToSourceCSText(instruction.Parameters[0].Size),
 										ConditionToCSText((ConditionEnum)instruction.Parameters[2].Value),
@@ -1442,7 +1611,7 @@ internal class Program
 										uiOffset);
 									break;
 								case InstructionEnum.IfOr:
-									uiOffset = (instruction.Location.Offset + (uint)instruction.Bytes.Count + instruction.Parameters[3].Value) & 0xffff;
+									uiOffset = (instruction.LinearAddress + (uint)instruction.Bytes.Count + instruction.Parameters[3].Value) & 0xffff;
 									writer.WriteLine("\t\t\tif ({0} {1} 0) goto L{2:x4};",
 										instruction.Parameters[0].ToSourceCSText(instruction.Parameters[0].Size),
 										ConditionToCSText((ConditionEnum)instruction.Parameters[2].Value),
@@ -1527,9 +1696,9 @@ internal class Program
 
 				writer.WriteLine("('{0}'), '{1}' {2}:0x{3:x} - 0x{4:x}",
 					segment.Namespace, function.Name, function.Segment, function.Offset,
-					lastInstruction.Location.Offset + lastInstruction.Bytes.Count - 1);
+					lastInstruction.LinearAddress + lastInstruction.Bytes.Count - 1);
 
-				uiOffset1 = lastInstruction.Location.Offset + (uint)lastInstruction.Bytes.Count;
+				uiOffset1 = lastInstruction.LinearAddress + (uint)lastInstruction.Bytes.Count;
 			}
 			if (uiOffset1 != exe.Segments[(int)uiSegment1].Data.Length)
 			{
@@ -2354,7 +2523,7 @@ internal class Program
 		}
 	}
 
-	private static void MatchModule(CModule module, List<Segment> segments, List<ModuleMatch> matches)
+	private static void MatchModule(OBJModule module, List<Segment> segments, List<ModuleMatch> matches)
 	{
 		// iterate through data records that contain code
 		for (int i = 0; i < module.DataRecords.Count; i++)
@@ -2391,7 +2560,7 @@ internal class Program
 							if (iPos1 >= moduleData.Data.Length && iFixIndex >= moduleData.Fixups.Count)
 							{
 								int iTemp = moduleData.Data.Length;
-								matches.Add(new ModuleMatch(j, module, iPos - iTemp, iTemp));
+								matches.Add(new ModuleMatch(module, (uint)(iPos - iTemp), iTemp));
 								//Console.WriteLine("Matched library module {0} in segment {1} [0x{2:x} - 0x{3:x}]", module.Name, j, iPos - iTemp, iPos - 1);
 								iPos--;
 								iPos1 = 0;
@@ -2553,7 +2722,7 @@ internal class Program
 						if (iPos1 >= moduleData.Data.Length && iFixIndex >= moduleData.Fixups.Count)
 						{
 							int iTemp = moduleData.Data.Length;
-							matches.Add(new ModuleMatch(j, module, iPos - iTemp, iTemp));
+							matches.Add(new ModuleMatch(module, (uint)(iPos - iTemp), iTemp));
 							Console.WriteLine("Matched library module {0} in segment {1} [0x{2:x} - 0x{3:x}]", module.Name, j, iPos - iTemp, iPos - 1);
 						}
 					}
@@ -2570,7 +2739,7 @@ internal class Program
 		}
 	}
 
-	private static void MatchModuleToEXE(CModule module, MZExecutable exe, List<ModuleMatch> matches)
+	private static void MatchModuleToEXE(OBJModule module, MZExecutable exe, List<ModuleMatch> matches)
 	{
 		if (module.Name.EndsWith("crt0fp.asm"))
 			return;
@@ -2602,7 +2771,10 @@ internal class Program
 			if (bSkip)
 				continue;
 
-			if (moduleData.Segment.ClassName.Equals("CODE", StringComparison.CurrentCultureIgnoreCase))
+			if (moduleData.Segment.ClassName.Equals("CODE", StringComparison.CurrentCultureIgnoreCase) ||
+				moduleData.Segment.ClassName.Equals("_CODE", StringComparison.CurrentCultureIgnoreCase)||
+				moduleData.Segment.ClassName.Equals("TEXT", StringComparison.CurrentCultureIgnoreCase) ||
+				moduleData.Segment.ClassName.Equals("_TEXT", StringComparison.CurrentCultureIgnoreCase))
 			{
 				// skip segments that contain data or are too short
 				if (exe.Data.Length >= moduleData.Data.Length)
@@ -2619,7 +2791,7 @@ internal class Program
 						if (iPos1 >= moduleData.Data.Length && iFixIndex >= moduleData.Fixups.Count)
 						{
 							int iTemp = moduleData.Data.Length;
-							matches.Add(new ModuleMatch(0, module, iPos - iTemp, iTemp));
+							matches.Add(new ModuleMatch(module, (uint)(iPos - iTemp), iTemp));
 							Console.WriteLine("Matched library module {0} in segment {1} [0x{2:x} - 0x{3:x}]", module.Name, 0, iPos - iTemp, iPos - 1);
 							iPos--;
 							iPos1 = 0;
@@ -2668,6 +2840,16 @@ internal class Program
 								iFixIndex++;
 								continue;
 							}
+							// skip long pointer references
+							else if (iFixIndex < moduleData.Fixups.Count &&
+								moduleData.Fixups[iFixIndex].FixupLocationType == FixupLocationTypeEnum.LongPointer32bit &&
+								moduleData.Fixups[iFixIndex].DataOffset == iPos1)
+							{
+								iPos += moduleData.Fixups[iFixIndex].Length;
+								iPos1 += moduleData.Fixups[iFixIndex].Length;
+								iFixIndex++;
+								continue;
+							}
 							// skip intra segment offset adjustments
 							else if (iFixIndex < moduleData.Fixups.Count &&
 								moduleData.Fixups[iFixIndex].DataOffset == iPos1 &&
@@ -2711,6 +2893,19 @@ internal class Program
 								iFixIndex++;
 								continue;
 							}
+							// skip long pointer references
+							if (iFixIndex < moduleData.Fixups.Count &&
+							iRelIndex < exe.Relocations.Count &&
+							exe.Relocations[iRelIndex].Offset != iPos &&
+							moduleData.Fixups[iFixIndex].FixupLocationType == FixupLocationTypeEnum.LongPointer32bit &&
+							moduleData.Fixups[iFixIndex].DataOffset == iPos1)
+							{
+								iPos += moduleData.Fixups[iFixIndex].Length - 1;
+								iPos1 += moduleData.Fixups[iFixIndex].Length;
+								iFixIndex++;
+								continue;
+							}
+
 							// no relocations for this position and data content matches
 							else if (exe.Data[iPos] == moduleData.Data[iPos1] &&
 								(iRelIndex >= exe.Relocations.Count || exe.Relocations[iRelIndex].Offset != iPos) &&
@@ -2773,7 +2968,7 @@ internal class Program
 					if (iPos1 >= moduleData.Data.Length && iFixIndex >= moduleData.Fixups.Count)
 					{
 						int iTemp = moduleData.Data.Length;
-						matches.Add(new ModuleMatch(0, module, iPos - iTemp, iTemp));
+						matches.Add(new ModuleMatch(module, (uint)(iPos - iTemp), iTemp));
 						Console.WriteLine("Matched library module {0} in segment {1} [0x{2:x} - 0x{3:x}]", module.Name, 0, iPos - iTemp, iPos - 1);
 					}
 				}

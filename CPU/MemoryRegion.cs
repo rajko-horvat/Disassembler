@@ -16,26 +16,26 @@ namespace Disassembler.CPU
 
 	public class MemoryRegion
 	{
-		private int iStart;
+		private uint iStart;
 		private int iSize;
 		private MemoryFlagsEnum eAccessFlags;
 
 		public MemoryRegion(ushort segment, ushort offset, int size)
-			: this(MemoryRegion.ToAbsolute(segment, offset), size, MemoryFlagsEnum.None)
+			: this(MemoryRegion.ToLinearAddress(segment, offset), size, MemoryFlagsEnum.None)
 		{
 		}
 
 		public MemoryRegion(ushort segment, ushort offset, int size, MemoryFlagsEnum access)
-			: this(MemoryRegion.ToAbsolute(segment, offset), size, access)
+			: this(MemoryRegion.ToLinearAddress(segment, offset), size, access)
 		{
 		}
 
-		public MemoryRegion(int start, int size)
+		public MemoryRegion(uint start, int size)
 			: this(start, size, MemoryFlagsEnum.None)
 		{
 		}
 
-		public MemoryRegion(int start, int size, MemoryFlagsEnum access)
+		public MemoryRegion(uint start, int size, MemoryFlagsEnum access)
 		{
 			this.iStart = start;
 			this.iSize = size;
@@ -48,7 +48,7 @@ namespace Disassembler.CPU
 			set { eAccessFlags = value; }
 		}
 
-		public int Start
+		public uint Start
 		{
 			get
 			{
@@ -64,30 +64,30 @@ namespace Disassembler.CPU
 			}
 		}
 
-		public int End
+		public uint End
 		{
 			get
 			{
-				return this.iStart + this.iSize - 1;
+				return (uint)(this.iStart + this.iSize - 1);
 			}
 		}
 
 		public bool CheckBounds(ushort segment, ushort offset)
 		{
-			return this.CheckBounds(MemoryRegion.ToAbsolute(segment, offset), 1);
+			return this.CheckBounds(MemoryRegion.ToLinearAddress(segment, offset), 1);
 		}
 
 		public bool CheckBounds(ushort segment, ushort offset, int size)
 		{
-			return this.CheckBounds(MemoryRegion.ToAbsolute(segment, offset), size);
+			return this.CheckBounds(MemoryRegion.ToLinearAddress(segment, offset), size);
 		}
 
-		public bool CheckBounds(int address)
+		public bool CheckBounds(uint address)
 		{
 			return this.CheckBounds(address, 1);
 		}
 
-		public bool CheckBounds(int address, int size)
+		public bool CheckBounds(uint address, int size)
 		{
 			if (address >= this.iStart && address + size - 1 < this.iStart + this.iSize)
 			{
@@ -99,10 +99,10 @@ namespace Disassembler.CPU
 
 		public bool CheckOverlap(ushort segment, ushort offset, int size)
 		{
-			return this.CheckOverlap(MemoryRegion.ToAbsolute(segment, offset), size);
+			return this.CheckOverlap(MemoryRegion.ToLinearAddress(segment, offset), size);
 		}
 
-		public bool CheckOverlap(int address, int size)
+		public bool CheckOverlap(uint address, int size)
 		{
 			if (address >= this.iStart || address < this.iStart + this.iSize ||
 				(address + size - 1) >= this.iStart || (address + size - 1) < this.iStart + this.iSize)
@@ -112,23 +112,23 @@ namespace Disassembler.CPU
 			return false;
 		}
 
-		public int MapAddress(ushort segment, ushort offset)
+		public uint MapAddress(ushort segment, ushort offset)
 		{
-			return this.MapAddress(MemoryRegion.ToAbsolute(segment, offset));
+			return this.MapAddress(MemoryRegion.ToLinearAddress(segment, offset));
 		}
 
-		public int MapAddress(int address)
+		public uint MapAddress(uint address)
 		{
-			return address - this.iStart;
+			return (uint)(address - this.iStart);
 		}
 
-		public static int ToAbsolute(ushort segment, ushort offset)
+		public static uint ToLinearAddress(ushort segment, ushort offset)
 		{
 			// 1MB limit!
-			return ((int)((int)segment << 4) + (int)offset) & 0xfffff;
+			return ((uint)((uint)segment << 4) + (uint)offset) & 0xfffff;
 		}
 
-		public static void AlignBlock(ref int address)
+		public static void AlignBlock(ref uint address)
 		{
 			if ((address & 0xf) != 0)
 			{
