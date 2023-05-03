@@ -53,7 +53,7 @@ namespace Disassembler.MZ
 		// 0x1A - Overlay, word (Value used for overlay management. If zero, this is the main executable.)
 		protected ushort usOverlayIndex = 0;
 		// 0x1C - Overlay information, word (Files sometimes contain extra information for the main's program overlay management.)
-		// always 1 in thiscase
+		// always 1 in this case
 		protected ushort usOverlayID = 0;
 		// actual code or data
 		protected byte[] aData = new byte[0];

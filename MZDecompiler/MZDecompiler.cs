@@ -140,6 +140,12 @@ namespace Disassembler.Decompiler
 			{
 				this.Decompile($"F0_0000_{aOffsets[i]:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Word, 0, 0, aOffsets[i], 0);
 			}
+			Console.WriteLine("--- Overlay offsets");
+			for (int i = 0; i < usCount; i++)
+			{
+				Console.WriteLine($"0x{aOffsets[i]:x4}");
+			}
+			Console.WriteLine("--- End overlay offsets");
 		}
 
 		public void WriteCode(string path, List<MZFunction> functions)
@@ -212,7 +218,11 @@ namespace Disassembler.Decompiler
 								break;
 
 							case InstructionEnum.DAS:
-								writer.WriteLine("\t\t\tthis.oCPU.DAS(this.oCPU.AX);");
+								writer.WriteLine("\t\t\tthis.oCPU.DAS();");
+								break;
+
+							case InstructionEnum.AAA:
+								writer.WriteLine("\t\t\tthis.oCPU.AAA();");
 								break;
 
 							case InstructionEnum.SAR:

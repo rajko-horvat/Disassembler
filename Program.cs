@@ -243,27 +243,11 @@ internal class Program
 		writer2.WriteLine("}");
 
 		// process misc.exe
+		Console.WriteLine("Processing overlay Misc");
 		MZExecutable miscEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\misc.exe");
 		MZDecompiler oMiscDecompiler = new MZDecompiler(miscEXE, aMatches);
 
 		oMiscDecompiler.DecompileOverlay();
-
-		/*MemoryStream reader = new MemoryStream(miscEXE.Data);
-
-		reader.Position = 0x30;
-		ushort usCount = MZExecutable.ReadUInt16(reader);
-		ushort[] aOffsets = new ushort[usCount];
-
-		for (int i = 0; i < usCount; i++)
-		{
-			aOffsets[i] = MZExecutable.ReadUInt16(reader);
-		}
-		reader.Close();
-
-		for (int i = 0; i < usCount; i++)
-		{
-			oMiscDecompiler.Decompile($"F0_0000_{aOffsets[i]:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Word, 0, 0, aOffsets[i], 0);
-		}*/
 
 		// Emit Misc functions
 		aFunctions = new List<MZFunction>();
@@ -281,13 +265,13 @@ internal class Program
 		writer2.WriteLine("\tget { return this.oMisc;}");
 		writer2.WriteLine("}");
 
-		// process misc.exe
+		Console.WriteLine("Processing overlay EGA");
 		MZExecutable egaEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\egraphic.exe");
 		MZDecompiler oEGADecompiler = new MZDecompiler(egaEXE, aMatches);
 
 		oEGADecompiler.DecompileOverlay();
 
-		// Emit Misc functions
+		// Emit egraphic functions
 		aFunctions = new List<MZFunction>();
 		for (int i = 0; i < oEGADecompiler.GlobalNamespace.Functions.Count; i++)
 		{
@@ -301,6 +285,28 @@ internal class Program
 		writer2.WriteLine("public EGA EGA");
 		writer2.WriteLine("{");
 		writer2.WriteLine("\tget { return this.oEGA;}");
+		writer2.WriteLine("}");
+
+		Console.WriteLine("Processing overlay NSound");
+		MZExecutable nsEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\nsound.cvl");
+		MZDecompiler oNSecompiler = new MZDecompiler(nsEXE, aMatches);
+
+		oNSecompiler.DecompileOverlay();
+
+		// Emit egraphic functions
+		aFunctions = new List<MZFunction>();
+		for (int i = 0; i < oNSecompiler.GlobalNamespace.Functions.Count; i++)
+		{
+			aFunctions.Add(oNSecompiler.GlobalNamespace.Functions[i].Value);
+		}
+
+		oNSecompiler.WriteCode(@"Out\Code\NSound.cs", aFunctions);
+		writer.WriteLine("private NSound oNSound;");
+		writer1.WriteLine("this.oNSound = new NSound(this);");
+		writer2.WriteLine();
+		writer2.WriteLine("public NSound NSound");
+		writer2.WriteLine("{");
+		writer2.WriteLine("\tget { return this.oNSound;}");
 		writer2.WriteLine("}");
 
 		writer2.Close();
