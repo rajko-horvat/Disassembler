@@ -162,6 +162,8 @@ namespace Disassembler.Decompiler
 							else
 							{
 								Console.WriteLine($"Jump to relative address {parameter.ToString()} in function {this.sName} - instruction at 0x{this.usSegment:x4}:0x{instruction.Offset:x4}");
+								// treat this as end of a instruction stream
+								bEnd = true;
 							}
 							break;
 

@@ -6,6 +6,7 @@ using IRB.Collections.Generic;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Xml.Linq;
 
@@ -122,6 +123,24 @@ namespace Disassembler.Decompiler
 			//function.Decompile(this);
 		}
 
+		public void DecompileOverlay()
+		{
+			MemoryStream reader = new MemoryStream(this.oExecutable.Data);
+			reader.Position = 0x30;
+			ushort usCount = MZExecutable.ReadUInt16(reader);
+			ushort[] aOffsets = new ushort[usCount];
+
+			for (int i = 0; i < usCount; i++)
+			{
+				aOffsets[i] = MZExecutable.ReadUInt16(reader);
+			}
+			reader.Close();
+
+			for (int i = 0; i < usCount; i++)
+			{
+				this.Decompile($"F0_0000_{aOffsets[i]:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Word, 0, 0, aOffsets[i], 0);
+			}
+		}
 
 		public void WriteCode(string path, List<MZFunction> functions)
 		{

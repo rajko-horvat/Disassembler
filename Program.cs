@@ -156,6 +156,9 @@ internal class Program
 		oDecompiler.Decompile("Start", CallTypeEnum.Undefined, new List<CParameter>(), CType.Word,
 			0, (ushort)(mzEXE.InitialCS + usSegmentOffset), mzEXE.InitialIP, (uint)usSegmentOffset << 4);
 
+		oDecompiler.Decompile($"F0_{0x2fa1:x4}_{0x644:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x2fa1, 0x644, (uint)usSegmentOffset << 4);
+		
 		// emit generated code
 		StreamWriter writer = new StreamWriter("Out\\Code\\Objects.cs");
 		StreamWriter writer1 = new StreamWriter("Out\\Code\\Inits.cs");
@@ -242,7 +245,10 @@ internal class Program
 		// process misc.exe
 		MZExecutable miscEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\misc.exe");
 		MZDecompiler oMiscDecompiler = new MZDecompiler(miscEXE, aMatches);
-		MemoryStream reader = new MemoryStream(miscEXE.Data);
+
+		oMiscDecompiler.DecompileOverlay();
+
+		/*MemoryStream reader = new MemoryStream(miscEXE.Data);
 
 		reader.Position = 0x30;
 		ushort usCount = MZExecutable.ReadUInt16(reader);
@@ -257,7 +263,7 @@ internal class Program
 		for (int i = 0; i < usCount; i++)
 		{
 			oMiscDecompiler.Decompile($"F0_0000_{aOffsets[i]:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Word, 0, 0, aOffsets[i], 0);
-		}
+		}*/
 
 		// Emit Misc functions
 		aFunctions = new List<MZFunction>();
@@ -267,13 +273,35 @@ internal class Program
 		}
 
 		oMiscDecompiler.WriteCode(@"Out\Code\Misc.cs", aFunctions);
-		writer.WriteLine("private Misc Misc;");
+		writer.WriteLine("private Misc oMisc;");
 		writer1.WriteLine("this.oMisc = new Misc(this);");
+		writer2.WriteLine();
 		writer2.WriteLine("public Misc Misc");
 		writer2.WriteLine("{");
 		writer2.WriteLine("\tget { return this.oMisc;}");
 		writer2.WriteLine("}");
 
+		// process misc.exe
+		MZExecutable egaEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\egraphic.exe");
+		MZDecompiler oEGADecompiler = new MZDecompiler(egaEXE, aMatches);
+
+		oEGADecompiler.DecompileOverlay();
+
+		// Emit Misc functions
+		aFunctions = new List<MZFunction>();
+		for (int i = 0; i < oEGADecompiler.GlobalNamespace.Functions.Count; i++)
+		{
+			aFunctions.Add(oEGADecompiler.GlobalNamespace.Functions[i].Value);
+		}
+
+		oEGADecompiler.WriteCode(@"Out\Code\EGA.cs", aFunctions);
+		writer.WriteLine("private EGA oEGA;");
+		writer1.WriteLine("this.oEGA = new EGA(this);");
+		writer2.WriteLine();
+		writer2.WriteLine("public EGA EGA");
+		writer2.WriteLine("{");
+		writer2.WriteLine("\tget { return this.oEGA;}");
+		writer2.WriteLine("}");
 
 		writer2.Close();
 		writer1.Close();
