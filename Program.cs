@@ -158,7 +158,10 @@ internal class Program
 
 		oDecompiler.Decompile($"F0_{0x2fa1:x4}_{0x644:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
 			0, 0x2fa1, 0x644, (uint)usSegmentOffset << 4);
-		
+
+		oDecompiler.Decompile($"F0_{0x1000:x4}_{0x1a7:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1000, 0x1a7, (uint)usSegmentOffset << 4);
+
 		// emit generated code
 		StreamWriter writer = new StreamWriter("Out\\Code\\Objects.cs");
 		StreamWriter writer1 = new StreamWriter("Out\\Code\\Inits.cs");
@@ -270,6 +273,9 @@ internal class Program
 		MZDecompiler oEGADecompiler = new MZDecompiler(egaEXE, aMatches);
 
 		oEGADecompiler.DecompileOverlay();
+
+		oEGADecompiler.Decompile($"F0_0000_{0x19b8:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x19b8, 0);
+		oEGADecompiler.Decompile($"F0_0000_{0x1a3c:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x1a3c, 0);
 
 		// Emit egraphic functions
 		aFunctions = new List<MZFunction>();

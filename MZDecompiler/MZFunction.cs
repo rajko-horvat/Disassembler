@@ -252,7 +252,7 @@ namespace Disassembler.Decompiler
 							break;
 
 						case InstructionEnum.IRET:
-							Console.WriteLine($"Unexpected return from interrupt at function {this.sName} at 0x{this.usSegment:x4}:0x{instruction.Offset:x4}");
+							//Console.WriteLine($"Unexpected return from interrupt at function {this.sName} at 0x{this.usSegment:x4}:0x{instruction.Offset:x4}");
 							bEnd = true;
 							break;
 

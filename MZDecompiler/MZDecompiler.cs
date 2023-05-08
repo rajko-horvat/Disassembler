@@ -138,7 +138,7 @@ namespace Disassembler.Decompiler
 
 			for (int i = 0; i < usCount; i++)
 			{
-				this.Decompile($"F0_0000_{aOffsets[i]:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Word, 0, 0, aOffsets[i], 0);
+				this.Decompile($"F0_0000_{aOffsets[i]:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, aOffsets[i], 0);
 			}
 			Console.WriteLine("--- Overlay offsets");
 			for (int i = 0; i < usCount; i++)
@@ -934,6 +934,13 @@ namespace Disassembler.Decompiler
 								{
 									writer.WriteLine("\t\tthis.oCPU.SP.Word += {0};", instruction.Parameters[0].ToCSTextMZ(instruction.OperandSize));
 								}*/
+								writer.WriteLine("\t\t\tthis.oParent.LogWriteLine(\"Exiting function '{0}'\");", function.Name);
+								if (k != function.Instructions.Count - 1)
+									writer.WriteLine("\t\t\treturn;");
+								break;
+
+							case InstructionEnum.IRET:
+								writer.WriteLine("\t\t\t// IRET");
 								writer.WriteLine("\t\t\tthis.oParent.LogWriteLine(\"Exiting function '{0}'\");", function.Name);
 								if (k != function.Instructions.Count - 1)
 									writer.WriteLine("\t\t\treturn;");
