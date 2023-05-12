@@ -943,13 +943,13 @@ namespace Disassembler.Decompiler
 										parameter.ToCSTextMZ(instruction.OperandSize)));
 								}
 								//writer.WriteLine("\t\t\tthis.oCPU.PopDWord(); // stack management - pop return offset, segment");
-								writer.WriteLine("\t\t\tthis.oParent.LogWriteLine(\"Exiting function '{0}'\");", function.Name);
+								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"'{0}'\");", function.Name);
 								writer.WriteLine("\t\t\treturn;");
 								break;
 
 							case InstructionEnum.RET:
 								writer.WriteLine("\t\t\t// Near return");
-								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"Exiting function '{0}'\");", function.Name);
+								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"'{0}'\");", function.Name);
 								if (k != function.Instructions.Count - 1)
 									writer.WriteLine("\t\t\treturn;");
 								break;
@@ -963,14 +963,14 @@ namespace Disassembler.Decompiler
 									writer.WriteLine("\t\tthis.oCPU.SP.Word += {0};", instruction.Parameters[0].ToCSTextMZ(instruction.OperandSize));
 								}*/
 								writer.WriteLine("\t\t\t// Far return");
-								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"Exiting function '{0}'\");", function.Name);
+								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"'{0}'\");", function.Name);
 								if (k != function.Instructions.Count - 1)
 									writer.WriteLine("\t\t\treturn;");
 								break;
 
 							case InstructionEnum.IRET:
 								writer.WriteLine("\t\t\t// IRET - Pop flags and Far return");
-								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"Exiting function '{0}'\");", function.Name);
+								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"'{0}'\");", function.Name);
 								if (k != function.Instructions.Count - 1)
 									writer.WriteLine("\t\t\treturn;");
 								break;
