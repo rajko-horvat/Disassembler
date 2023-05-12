@@ -7,11 +7,14 @@ using System.Text;
 
 namespace Disassembler.Decompiler
 {
+	[Flags]
 	public enum CallTypeEnum
 	{
-		Cdecl,
-		Pascal,
-		Undefined
+		Undefined = 0,
+		Cdecl = 1,
+		Pascal = 2,
+		Near = 0x10,
+		Far = 0x20
 	}
 
 	public class CFunction

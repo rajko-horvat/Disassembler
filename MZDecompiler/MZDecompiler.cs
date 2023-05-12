@@ -181,8 +181,8 @@ namespace Disassembler.Decompiler
 					writer.WriteLine();
 					writer.WriteLine("\t\tpublic void {0}()", function.Name);
 					writer.WriteLine("\t\t{");
-					writer.WriteLine("\t\t\tthis.oParent.LogWriteLine(\"Entering function '{0}'({1}) at 0x{2:x4}:0x{3:x4}, stack: 0x{4:x}\");",
-						function.Name, function.CallType.ToString(), function.Segment, function.Offset, function.StackSize);
+					writer.WriteLine("\t\t\tthis.oParent.LogEnterBlock(\"'{0}'({1}) at 0x{2:x4}:0x{3:x4}\");",
+						function.Name, function.CallType.ToString(), function.Segment, function.Offset);
 					writer.WriteLine("\t\t\tthis.oCPU.CS.Word = 0x{0:x4}; // set this function segment", function.Segment);
 					writer.WriteLine();
 					writer.WriteLine("\t\t\t// function body");
@@ -682,6 +682,43 @@ namespace Disassembler.Decompiler
 								writer.WriteLine("\t\t\t}");
 								break;
 
+							case InstructionEnum.Jcc:
+								uiOffset = MZFunction.AddRelativeToOffset(instruction, instruction.Parameters[1]);
+								writer.WriteLine("\t\t\tif (this.oCPU.Flags.{0}) goto L{1:x4};",
+									((ConditionEnum)instruction.Parameters[0].Value).ToString(), uiOffset);
+								break;
+
+							case InstructionEnum.JCXZ:
+								uiOffset = MZFunction.AddRelativeToOffset(instruction, instruction.Parameters[0]);
+								writer.WriteLine("\t\t\tif (this.oCPU.CX.Word == 0) goto L{0:x4};", uiOffset);
+								break;
+
+							case InstructionEnum.LOOP:
+								uiOffset = MZFunction.AddRelativeToOffset(instruction, instruction.Parameters[0]);
+								writer.WriteLine("\t\t\tif (this.oCPU.Loop(this.oCPU.CX)) goto L{0:x4};", uiOffset);
+								break;
+
+							case InstructionEnum.JMP:
+								parameter = instruction.Parameters[0];
+								if (parameter.Type == InstructionParameterTypeEnum.Relative)
+								{
+									uiOffset = MZFunction.AddRelativeToOffset(instruction, instruction.Parameters[0]);
+									writer.WriteLine("\t\t\tgoto L{0:x4};", uiOffset);
+								}
+								else if (parameter.Type == InstructionParameterTypeEnum.Register)
+								{
+									writer.WriteLine("\t\t\t// Probably a switch statement - near jump to register value");
+									writer.WriteLine("\t\t\tthis.oCPU.Jmp({0});", parameter.ToCSTextMZ(instruction.OperandSize));
+								}
+								else
+								{
+									writer.WriteLine("\t\t\t// Probably a switch statement - near jump to indirect address");
+									writer.WriteLine("\t\t\tthis.oCPU.Jmp({0});", string.Format("this.oCPU.ReadWord({0}, {1})",
+										parameter.GetSegmentTextMZ(),
+										parameter.ToCSTextMZ(instruction.OperandSize)));
+								}
+								break;
+
 							case InstructionEnum.CALL:
 								parameter = instruction.Parameters[0];
 								writer.WriteLine("\t\t\tthis.oCPU.PushWord(0x{0:x4}); // stack management - push return offset", instruction.Offset + instruction.Bytes.Count);
@@ -697,6 +734,11 @@ namespace Disassembler.Decompiler
 									function1 = this.GetFunction(0, instruction.Segment, (ushort)parameter.Value, function.StreamOffset);
 									if (function1 != null)
 									{
+										if ((function1.CallType & CallTypeEnum.Near) != CallTypeEnum.Near && (function1.CallType & CallTypeEnum.Far) == CallTypeEnum.Far)
+										{
+											Console.WriteLine($"Function '{function1.Name}' doesn't support near return");
+										}
+
 										if (function.Overlay != function1.Overlay || function.Segment != function1.Segment)
 										{
 											if (this.oGlobalNamespace.APIFunctions.ContainsKey(function1.Name))
@@ -743,49 +785,14 @@ namespace Disassembler.Decompiler
 										throw new Exception($"Can't find function 'F0_{parameter.Segment:x4}_{parameter.Value:x4}'");
 									}
 								}
+								// all calls in medium memory model are far
 								writer.WriteLine("\t\t\tthis.oCPU.PopWord(); // stack management - pop return offset");
-								break;
-
-							case InstructionEnum.Jcc:
-								uiOffset = MZFunction.AddRelativeToOffset(instruction, instruction.Parameters[1]);
-								writer.WriteLine("\t\t\tif (this.oCPU.Flags.{0}) goto L{1:x4};",
-									((ConditionEnum)instruction.Parameters[0].Value).ToString(), uiOffset);
-								break;
-
-							case InstructionEnum.JCXZ:
-								uiOffset = MZFunction.AddRelativeToOffset(instruction, instruction.Parameters[0]);
-								writer.WriteLine("\t\t\tif (this.oCPU.CX.Word == 0) goto L{0:x4};", uiOffset);
-								break;
-
-							case InstructionEnum.LOOP:
-								uiOffset = MZFunction.AddRelativeToOffset(instruction, instruction.Parameters[0]);
-								writer.WriteLine("\t\t\tif (this.oCPU.Loop(this.oCPU.CX)) goto L{0:x4};", uiOffset);
-								break;
-
-							case InstructionEnum.JMP:
-								parameter = instruction.Parameters[0];
-								if (parameter.Type == InstructionParameterTypeEnum.Relative)
-								{
-									uiOffset = MZFunction.AddRelativeToOffset(instruction, instruction.Parameters[0]);
-									writer.WriteLine("\t\t\tgoto L{0:x4};", uiOffset);
-								}
-								else if (parameter.Type == InstructionParameterTypeEnum.Register)
-								{
-									writer.WriteLine("\t\t\t// Probably a switch statement - near jump to register value");
-									writer.WriteLine("\t\t\tthis.oCPU.Jmp({0});", parameter.ToCSTextMZ(instruction.OperandSize));
-								}
-								else
-								{
-									writer.WriteLine("\t\t\t// Probably a switch statement - near jump to indirect address");
-									writer.WriteLine("\t\t\tthis.oCPU.Jmp({0});", string.Format("this.oCPU.ReadWord({0}, {1})",
-										parameter.GetSegmentTextMZ(),
-										parameter.ToCSTextMZ(instruction.OperandSize)));
-								}
+								//writer.WriteLine("\t\t\tthis.oCPU.CS.Word = 0x{0:x4}; // restore this function segment", function.Segment);
 								break;
 
 							case InstructionEnum.CALLF:
 								parameter = instruction.Parameters[0];
-								writer.WriteLine("\t\t\tthis.oCPU.PushWord(0x{0:x4}); // stack management - push return segment", instruction.Segment);
+								writer.WriteLine("\t\t\tthis.oCPU.PushWord(this.oCPU.CS.Word); // stack management - push return segment");
 								writer.WriteLine("\t\t\tthis.oCPU.PushWord(0x{0:x4}); // stack management - push return offset", instruction.Offset + instruction.Bytes.Count);
 								writer.WriteLine($"\t\t\t// Instruction address 0x{instruction.Segment:x4}:0x{instruction.Offset:x4}, size: {instruction.Bytes.Count}");
 								if (parameter.Type == InstructionParameterTypeEnum.SegmentOffset)
@@ -793,6 +800,11 @@ namespace Disassembler.Decompiler
 									function1 = this.GetFunction(0, parameter.Segment, (ushort)parameter.Value, function.StreamOffset);
 									if (function1 != null)
 									{
+										if ((function1.CallType & CallTypeEnum.Far) != CallTypeEnum.Far && (function1.CallType & CallTypeEnum.Near) == CallTypeEnum.Near)
+										{
+											Console.WriteLine($"Function '{function1.Name}' doesn't support far return");
+										}
+
 										if (function.Overlay != function1.Overlay || function.Segment != function1.Segment)
 										{
 											if (this.oGlobalNamespace.APIFunctions.ContainsKey(function1.Name))
@@ -845,15 +857,22 @@ namespace Disassembler.Decompiler
 										parameter.GetSegmentTextMZ(),
 										parameter.ToCSTextMZ(instruction.OperandSize)));
 								}
-								writer.WriteLine("\t\t\tthis.oCPU.PopDWord(); // stack management - pop return offset, segment");
+								writer.WriteLine("\t\t\tthis.oCPU.PopDWord(); // stack management - pop return offset and segment");
 								writer.WriteLine("\t\t\tthis.oCPU.CS.Word = 0x{0:x4}; // restore this function segment", function.Segment);
 								break;
 
 							case InstructionEnum.CallOverlay:
 								writer.WriteLine("\t\t\t// Call to overlay");
+								writer.WriteLine("\t\t\tthis.oCPU.PushWord(this.oCPU.CS.Word); // stack management - push return segment");
+								writer.WriteLine("\t\t\tthis.oCPU.PushWord(0x{0:x4}); // stack management - push return offset", instruction.Offset + instruction.Bytes.Count);
 								function1 = this.GetFunction((int)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value, function.StreamOffset);
 								if (function1 != null)
 								{
+									if ((function1.CallType & CallTypeEnum.Far) != CallTypeEnum.Far && (function1.CallType & CallTypeEnum.Near) == CallTypeEnum.Near)
+									{
+										Console.WriteLine($"Function '{function1.Name}' doesn't support far return");
+									}
+
 									if (function.Overlay != function1.Overlay || function.Segment != function1.Segment)
 									{
 										if (this.oGlobalNamespace.APIFunctions.ContainsKey(function1.Name))
@@ -878,6 +897,8 @@ namespace Disassembler.Decompiler
 								{
 									throw new Exception($"Can't find function 'F{instruction.Parameters[0].Value}_0000_{instruction.Parameters[1].Value:x4}'");
 								}
+								writer.WriteLine("\t\t\tthis.oCPU.PopDWord(); // stack management - pop return offset and segment");
+								writer.WriteLine("\t\t\tthis.oCPU.CS.Word = 0x{0:x4}; // restore this function segment", function.Segment);
 								break;
 
 							case InstructionEnum.JMPF:
@@ -926,6 +947,13 @@ namespace Disassembler.Decompiler
 								writer.WriteLine("\t\t\treturn;");
 								break;
 
+							case InstructionEnum.RET:
+								writer.WriteLine("\t\t\t// Near return");
+								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"Exiting function '{0}'\");", function.Name);
+								if (k != function.Instructions.Count - 1)
+									writer.WriteLine("\t\t\treturn;");
+								break;
+
 							case InstructionEnum.RETF:
 								//writer.WriteLine("\t\t// end function body");
 								//writer.WriteLine("\t\tthis.oCPU.PopWord();");
@@ -934,14 +962,15 @@ namespace Disassembler.Decompiler
 								{
 									writer.WriteLine("\t\tthis.oCPU.SP.Word += {0};", instruction.Parameters[0].ToCSTextMZ(instruction.OperandSize));
 								}*/
-								writer.WriteLine("\t\t\tthis.oParent.LogWriteLine(\"Exiting function '{0}'\");", function.Name);
+								writer.WriteLine("\t\t\t// Far return");
+								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"Exiting function '{0}'\");", function.Name);
 								if (k != function.Instructions.Count - 1)
 									writer.WriteLine("\t\t\treturn;");
 								break;
 
 							case InstructionEnum.IRET:
-								writer.WriteLine("\t\t\t// IRET");
-								writer.WriteLine("\t\t\tthis.oParent.LogWriteLine(\"Exiting function '{0}'\");", function.Name);
+								writer.WriteLine("\t\t\t// IRET - Pop flags and Far return");
+								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"Exiting function '{0}'\");", function.Name);
 								if (k != function.Instructions.Count - 1)
 									writer.WriteLine("\t\t\treturn;");
 								break;

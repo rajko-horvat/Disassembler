@@ -5,6 +5,7 @@ using IRB.Collections.Generic;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection.Metadata;
 using System.Text;
 
 namespace Disassembler.Decompiler
@@ -223,7 +224,6 @@ namespace Disassembler.Decompiler
 								instruction.Parameters.Add(new InstructionParameter(InstructionParameterTypeEnum.Immediate, InstructionSizeEnum.Byte, (byte)(byte0 & 0xff)));
 								instruction.Parameters.Add(new InstructionParameter(InstructionParameterTypeEnum.Immediate, InstructionSizeEnum.Word, (ushort)((byte1 & 0xff) | ((byte2 & 0xff) << 8))));
 								ip += 3;
-
 							}
 							else if (aInstructions.Count > 1)
 							{
@@ -251,48 +251,75 @@ namespace Disassembler.Decompiler
 							}
 							break;
 
-						case InstructionEnum.IRET:
-							//Console.WriteLine($"Unexpected return from interrupt at function {this.sName} at 0x{this.usSegment:x4}:0x{instruction.Offset:x4}");
-							bEnd = true;
-							break;
-
 						case InstructionEnum.RET:
 							// convert near return to far return
-							instruction.InstructionType = InstructionEnum.RETF;
-							if (instruction.Parameters.Count == 1 && this.eCallType != CallTypeEnum.Undefined && this.eCallType != CallTypeEnum.Pascal)
-								throw new Exception("Inconsistent function call type");
-
-							if (instruction.Parameters.Count == 0 && this.eCallType != CallTypeEnum.Undefined && this.eCallType != CallTypeEnum.Cdecl)
-								throw new Exception("Inconsistent function call type");
-
-							if (instruction.Parameters.Count == 1)
+							if ((this.eCallType & CallTypeEnum.Far) == CallTypeEnum.Far)
 							{
-								this.eCallType = CallTypeEnum.Pascal;
-								this.iParameterSize = (int)instruction.Parameters[0].Value;
+								Console.WriteLine($"Inconsistent function return type in {this.sName}");
+							}
+							this.eCallType |= CallTypeEnum.Near;
+
+							if (instruction.Parameters.Count == 1 && (this.eCallType & CallTypeEnum.Cdecl) == CallTypeEnum.Cdecl)
+							{
+								Console.WriteLine($"Inconsistent function call type in {this.sName}");
+							}
+							else if (instruction.Parameters.Count == 0 && (this.eCallType & CallTypeEnum.Pascal) == CallTypeEnum.Pascal)
+							{
+								Console.WriteLine($"Inconsistent function call type in {this.sName}");
 							}
 							else
 							{
-								this.eCallType = CallTypeEnum.Cdecl;
+								if (instruction.Parameters.Count == 1)
+								{
+									this.eCallType |= CallTypeEnum.Pascal;
+									this.iParameterSize = (int)instruction.Parameters[0].Value;
+								}
+								else
+								{
+									this.eCallType |= CallTypeEnum.Cdecl;
+								}
 							}
 							bEnd = true;
 							break;
 
 						case InstructionEnum.RETF:
-							if (instruction.Parameters.Count == 1 && this.eCallType != CallTypeEnum.Undefined && this.eCallType != CallTypeEnum.Pascal)
-								Console.WriteLine($"Inconsistent function call type in {this.sName}");
-
-							if (instruction.Parameters.Count == 0 && this.eCallType != CallTypeEnum.Undefined && this.eCallType != CallTypeEnum.Cdecl)
-								Console.WriteLine($"Inconsistent function call type in {this.sName}");
-
-							if (instruction.Parameters.Count == 1)
+							if ((this.eCallType & CallTypeEnum.Near) == CallTypeEnum.Near)
 							{
-								this.eCallType = CallTypeEnum.Pascal;
-								this.iParameterSize = (int)instruction.Parameters[0].Value;
+								Console.WriteLine($"Inconsistent function return type in {this.sName}");
+							}
+							this.eCallType |= CallTypeEnum.Far;
+
+							if (instruction.Parameters.Count == 1 && (this.eCallType & CallTypeEnum.Cdecl) == CallTypeEnum.Cdecl)
+							{
+								Console.WriteLine($"Inconsistent function call type in {this.sName}");
+							}
+							else if (instruction.Parameters.Count == 0 && (this.eCallType & CallTypeEnum.Pascal) == CallTypeEnum.Pascal)
+							{
+								Console.WriteLine($"Inconsistent function call type in {this.sName}");
 							}
 							else
 							{
-								this.eCallType = CallTypeEnum.Cdecl;
+								if (instruction.Parameters.Count == 1)
+								{
+									this.eCallType |= CallTypeEnum.Pascal;
+									this.iParameterSize = (int)instruction.Parameters[0].Value;
+								}
+								else
+								{
+									this.eCallType |= CallTypeEnum.Cdecl;
+								}
 							}
+							bEnd = true;
+							break;
+
+						case InstructionEnum.IRET:
+							if ((this.eCallType & CallTypeEnum.Near) == CallTypeEnum.Near)
+							{
+								Console.WriteLine($"Inconsistent function return type in {this.sName}");
+							}
+							this.eCallType |= CallTypeEnum.Far;
+
+							//Console.WriteLine($"Unexpected return from interrupt at function {this.sName} at 0x{this.usSegment:x4}:0x{instruction.Offset:x4}");
 							bEnd = true;
 							break;
 					}
@@ -612,7 +639,7 @@ namespace Disassembler.Decompiler
 			}*/
 			#endregion
 
-			#region assign labels to instructions, convert relative call to far call
+			#region assign labels to instructions, convert relative call to absolute call
 			for (int i = 0; i < this.aInstructions.Count; i++)
 			{
 				Instruction instruction = this.aInstructions[i];
@@ -1095,6 +1122,43 @@ namespace Disassembler.Decompiler
 									CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 
 									0, parameter.Segment, (ushort)parameter.Value, this.uiStreamOffset);
 								//function = decompiler.GetFunction(parameter.Segment, (ushort)parameter.Value, this.uiStreamOffset);
+							}
+						}
+						break;
+				}
+			}
+			#endregion
+
+			#region Remove 'push cs' instruction before near calls (if a function has far return)
+			for (int i = 0; i < this.aInstructions.Count; i++)
+			{
+				Instruction instruction = this.aInstructions[i];
+
+				switch (instruction.InstructionType)
+				{
+					case InstructionEnum.CALL:
+						if (i > 0 && instruction.Parameters[0].Type == InstructionParameterTypeEnum.Immediate)
+						{
+							// is instruction prefixed by PUSH CS?
+							instruction1 = this.aInstructions[i - 1];
+
+							if (instruction1.InstructionType == InstructionEnum.PUSH &&
+								instruction1.Parameters.Count == 1 &&
+								instruction1.Parameters[0].Type == InstructionParameterTypeEnum.SegmentRegister &&
+								instruction1.Parameters[0].Value == (uint)SegmentRegisterEnum.CS)
+							{
+								MZFunction? function1 = this.oParent.GetFunction(0, instruction.Segment, (ushort)instruction.Parameters[0].Value, this.uiStreamOffset);
+								if (function1 != null)
+								{
+									if ((function1.CallType & CallTypeEnum.Far) == CallTypeEnum.Far)
+									{
+										instruction.InstructionType = InstructionEnum.CALLF;
+										instruction.Parameters[0] = new InstructionParameter(instruction.Segment, instruction.Parameters[0].Value);
+
+										// turn push cs instruction to nop, as it is not needed anymore
+										instruction1.InstructionType = InstructionEnum.NOP;
+									}
+								}
 							}
 						}
 						break;

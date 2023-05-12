@@ -276,6 +276,7 @@ internal class Program
 
 		oEGADecompiler.Decompile($"F0_0000_{0x19b8:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x19b8, 0);
 		oEGADecompiler.Decompile($"F0_0000_{0x1a3c:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x1a3c, 0);
+		oEGADecompiler.Decompile($"F0_0000_{0xcf1:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0xcf1, 0);
 
 		// Emit egraphic functions
 		aFunctions = new List<MZFunction>();
