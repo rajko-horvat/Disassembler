@@ -275,6 +275,7 @@ internal class Program
 		oEGADecompiler.DecompileOverlay();
 
 		oEGADecompiler.Decompile($"F0_0000_{0x19b8:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x19b8, 0);
+		oEGADecompiler.Decompile($"F0_0000_{0x1a08:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x1a08, 0);
 		oEGADecompiler.Decompile($"F0_0000_{0x1a3c:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x1a3c, 0);
 		oEGADecompiler.Decompile($"F0_0000_{0xcf1:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0xcf1, 0);
 
@@ -285,7 +286,7 @@ internal class Program
 			aFunctions.Add(oEGADecompiler.GlobalNamespace.Functions[i].Value);
 		}
 
-		oEGADecompiler.WriteCode(@"Out\Code\EGA.cs", aFunctions);
+		oEGADecompiler.WriteCode(@"Out\Code\VGA.cs", aFunctions);
 		writer.WriteLine("private EGA oEGA;");
 		writer1.WriteLine("this.oEGA = new EGA(this);");
 		writer2.WriteLine();
