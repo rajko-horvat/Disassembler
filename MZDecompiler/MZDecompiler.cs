@@ -509,9 +509,15 @@ namespace Disassembler.Decompiler
 								break;
 
 							case InstructionEnum.NOP:
-							case InstructionEnum.CLI:
-							case InstructionEnum.STI:
 								// ignore this instruction
+								break;
+
+							case InstructionEnum.CLI:
+								writer.WriteLine("\t\t\tthis.oCPU.CLI();");
+								break;
+
+							case InstructionEnum.STI:
+								writer.WriteLine("\t\t\tthis.oCPU.STI();");
 								break;
 
 							// stack instructions
