@@ -162,6 +162,13 @@ internal class Program
 		oDecompiler.Decompile($"F0_{0x1000:x4}_{0x1a7:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
 			0, 0x1000, 0x1a7, (uint)usSegmentOffset << 4);
 
+		oDecompiler.Decompile($"F0_{0x3045:x4}_{0x2b44:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x3045, 0x2b44, (uint)usSegmentOffset << 4);
+
+		// 0x18661169
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x1169:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x1169, (uint)usSegmentOffset << 4);
+
 		// emit generated code
 		StreamWriter writer = new StreamWriter("Out\\Code\\Objects.cs");
 		StreamWriter writer1 = new StreamWriter("Out\\Code\\Inits.cs");
@@ -229,8 +236,15 @@ internal class Program
 			writer2.WriteLine();
 		}
 
+		int iMaxOverlaySize = 0;
+		for (int i = 0; i < mzEXE.Overlays.Count; i++)
+		{
+			iMaxOverlaySize = Math.Max(iMaxOverlaySize, mzEXE.Overlays[i].Data.Length);
+		}
+		Console.WriteLine($"Maximum overlay size in bytes: 0x{iMaxOverlaySize:x4}");
+
 		// emit API functions
-		List<MZFunction> aFunctions = new List<MZFunction>();
+		List <MZFunction> aFunctions = new List<MZFunction>();
 
 		for (int i = 0; i < oDecompiler.GlobalNamespace.APIFunctions.Count; i++)
 		{
@@ -268,31 +282,31 @@ internal class Program
 		writer2.WriteLine("\tget { return this.oMisc;}");
 		writer2.WriteLine("}");
 
-		Console.WriteLine("Processing overlay EGA");
-		MZExecutable egaEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\egraphic.exe");
-		MZDecompiler oEGADecompiler = new MZDecompiler(egaEXE, aMatches);
+		Console.WriteLine("Processing overlay VGA");
+		MZExecutable vgaEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\mgraphic.exe");
+		MZDecompiler oVGADecompiler = new MZDecompiler(vgaEXE, aMatches);
 
-		oEGADecompiler.DecompileOverlay();
+		oVGADecompiler.DecompileOverlay();
 
-		oEGADecompiler.Decompile($"F0_0000_{0x19b8:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x19b8, 0);
+		/*oEGADecompiler.Decompile($"F0_0000_{0x19b8:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x19b8, 0);
 		oEGADecompiler.Decompile($"F0_0000_{0x1a08:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x1a08, 0);
 		oEGADecompiler.Decompile($"F0_0000_{0x1a3c:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0x1a3c, 0);
-		oEGADecompiler.Decompile($"F0_0000_{0xcf1:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0xcf1, 0);
+		oEGADecompiler.Decompile($"F0_0000_{0xcf1:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void, 0, 0, 0xcf1, 0);*/
 
 		// Emit egraphic functions
 		aFunctions = new List<MZFunction>();
-		for (int i = 0; i < oEGADecompiler.GlobalNamespace.Functions.Count; i++)
+		for (int i = 0; i < oVGADecompiler.GlobalNamespace.Functions.Count; i++)
 		{
-			aFunctions.Add(oEGADecompiler.GlobalNamespace.Functions[i].Value);
+			aFunctions.Add(oVGADecompiler.GlobalNamespace.Functions[i].Value);
 		}
 
-		oEGADecompiler.WriteCode(@"Out\Code\VGA.cs", aFunctions);
-		writer.WriteLine("private EGA oEGA;");
-		writer1.WriteLine("this.oEGA = new EGA(this);");
+		oVGADecompiler.WriteCode(@"Out\Code\VGADriver.cs", aFunctions);
+		writer.WriteLine("private VGADriver oVGA;");
+		writer1.WriteLine("this.oVGA = new VGADriver(this);");
 		writer2.WriteLine();
-		writer2.WriteLine("public EGA EGA");
+		writer2.WriteLine("public VGADriver VGA");
 		writer2.WriteLine("{");
-		writer2.WriteLine("\tget { return this.oEGA;}");
+		writer2.WriteLine("\tget { return this.oVGA;}");
 		writer2.WriteLine("}");
 
 		Console.WriteLine("Processing overlay NSound");

@@ -181,7 +181,7 @@ namespace Disassembler.Decompiler
 					writer.WriteLine();
 					writer.WriteLine("\t\tpublic void {0}()", function.Name);
 					writer.WriteLine("\t\t{");
-					writer.WriteLine("\t\t\tthis.oParent.LogEnterBlock(\"'{0}'({1}) at 0x{2:x4}:0x{3:x4}\");",
+					writer.WriteLine("\t\t\tthis.oCPU.Log.EnterBlock(\"'{0}'({1}) at 0x{2:x4}:0x{3:x4}\");",
 						function.Name, function.CallType.ToString(), function.Segment, function.Offset);
 					writer.WriteLine("\t\t\tthis.oCPU.CS.Word = 0x{0:x4}; // set this function segment", function.Segment);
 					writer.WriteLine();
@@ -949,13 +949,17 @@ namespace Disassembler.Decompiler
 										parameter.ToCSTextMZ(instruction.OperandSize)));
 								}
 								//writer.WriteLine("\t\t\tthis.oCPU.PopDWord(); // stack management - pop return offset, segment");
-								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"'{0}'\");", function.Name);
+								writer.WriteLine("\t\t\tthis.oCPU.Log.ExitBlock(\"'{0}'\");", function.Name);
 								writer.WriteLine("\t\t\treturn;");
 								break;
 
 							case InstructionEnum.RET:
 								writer.WriteLine("\t\t\t// Near return");
-								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"'{0}'\");", function.Name);
+								if (instruction.Parameters.Count > 0)
+								{
+									writer.WriteLine($"\t\t\tthis.oCPU.SP.Word = this.oCPU.ADDWord(this.oCPU.SP.Word, 0x{instruction.Parameters[0].Value:x});");
+								}
+								writer.WriteLine("\t\t\tthis.oCPU.Log.ExitBlock(\"'{0}'\");", function.Name);
 								if (k != function.Instructions.Count - 1)
 									writer.WriteLine("\t\t\treturn;");
 								break;
@@ -969,14 +973,18 @@ namespace Disassembler.Decompiler
 									writer.WriteLine("\t\tthis.oCPU.SP.Word += {0};", instruction.Parameters[0].ToCSTextMZ(instruction.OperandSize));
 								}*/
 								writer.WriteLine("\t\t\t// Far return");
-								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"'{0}'\");", function.Name);
+								if (instruction.Parameters.Count > 0)
+								{
+									writer.WriteLine($"\t\t\tthis.oCPU.SP.Word = this.oCPU.ADDWord(this.oCPU.SP.Word, 0x{instruction.Parameters[0].Value:x});");
+								}
+								writer.WriteLine("\t\t\tthis.oCPU.Log.ExitBlock(\"'{0}'\");", function.Name);
 								if (k != function.Instructions.Count - 1)
 									writer.WriteLine("\t\t\treturn;");
 								break;
 
 							case InstructionEnum.IRET:
 								writer.WriteLine("\t\t\t// IRET - Pop flags and Far return");
-								writer.WriteLine("\t\t\tthis.oParent.LogExitBlock(\"'{0}'\");", function.Name);
+								writer.WriteLine("\t\t\tthis.oCPU.Log.ExitBlock(\"'{0}'\");", function.Name);
 								if (k != function.Instructions.Count - 1)
 									writer.WriteLine("\t\t\treturn;");
 								break;
