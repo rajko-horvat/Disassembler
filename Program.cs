@@ -105,11 +105,11 @@ internal class Program
 	private static void ParseDOSEXE(string path)
 	{
 		ushort usSegmentOffset = 0x1000;
-		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\civ.exe");
+		MZExecutable mzEXE = new MZExecutable(@"..\..\..\..\..\Game\Dos\Installed\civ.exe");
 
 		mzEXE.ApplyRelocations(usSegmentOffset);
 
-		Library oLibrary1 = new Library(@"..\..\..\..\Compilers\MSC\Installed\MSC\LIB\MLIBC7.lib");
+		Library oLibrary1 = new Library(@"..\..\..\..\..\Compilers\MSC\Installed\MSC\LIB\MLIBC7.lib");
 
 		// unique set of segment names
 		BHashSet<string> aSegmentNames = new BHashSet<string>();
@@ -165,9 +165,31 @@ internal class Program
 		oDecompiler.Decompile($"F0_{0x3045:x4}_{0x2b44:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
 			0, 0x3045, 0x2b44, (uint)usSegmentOffset << 4);
 
-		// 0x18661169
+		// Segment 0x1866
 		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x1169:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
 			0, 0x1866, 0x1169, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x1280:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x1280, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x135a:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x135a, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x13a9:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x13a9, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x13f8:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x13f8, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x14a2:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x14a2, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x14f6:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x14f6, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x1560:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x1560, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x1593:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x1593, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x1610:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x1610, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x1643:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x1643, (uint)usSegmentOffset << 4);
+		oDecompiler.Decompile($"F0_{0x1866:x4}_{0x1676:x4}", CallTypeEnum.Undefined, new List<CParameter>(), CType.Void,
+			0, 0x1866, 0x1676, (uint)usSegmentOffset << 4);
 
 		// emit generated code
 		StreamWriter writer = new StreamWriter("Out\\Code\\Objects.cs");
@@ -261,7 +283,7 @@ internal class Program
 
 		// process misc.exe
 		Console.WriteLine("Processing overlay Misc");
-		MZExecutable miscEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\misc.exe");
+		MZExecutable miscEXE = new MZExecutable(@"..\..\..\..\..\Game\Dos\Installed\misc.exe");
 		MZDecompiler oMiscDecompiler = new MZDecompiler(miscEXE, aMatches);
 
 		oMiscDecompiler.DecompileOverlay();
@@ -283,7 +305,7 @@ internal class Program
 		writer2.WriteLine("}");
 
 		Console.WriteLine("Processing overlay VGA");
-		MZExecutable vgaEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\mgraphic.exe");
+		MZExecutable vgaEXE = new MZExecutable(@"..\..\..\..\..\Game\Dos\Installed\mgraphic.exe");
 		MZDecompiler oVGADecompiler = new MZDecompiler(vgaEXE, aMatches);
 
 		oVGADecompiler.DecompileOverlay();
@@ -310,7 +332,7 @@ internal class Program
 		writer2.WriteLine("}");
 
 		Console.WriteLine("Processing overlay NSound");
-		MZExecutable nsEXE = new MZExecutable(@"..\..\..\..\Game\Dos\Installed\nsound.cvl");
+		MZExecutable nsEXE = new MZExecutable(@"..\..\..\..\..\Game\Dos\Installed\nsound.cvl");
 		MZDecompiler oNSecompiler = new MZDecompiler(nsEXE, aMatches);
 
 		oNSecompiler.DecompileOverlay();
