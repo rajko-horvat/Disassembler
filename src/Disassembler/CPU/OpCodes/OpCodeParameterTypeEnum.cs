@@ -1,0 +1,31 @@
+﻿namespace Disassembler.CPU.OpCodes
+{
+	public enum OpCodeParameterTypeEnum
+	{
+		Undefined,
+		SignExtend,
+		OperandSize,
+		ReverseDirection,
+		FPUDestination,
+		FPUStackAddress,
+		AccumulatorWithRegister,
+		Register,
+		RegisterCL,
+		RegisterAWithDX,
+		RegisterDXWithA,
+		SegmentRegister,
+		SegmentRegisterNoCS,
+		SegmentRegisterFSGS,
+		MemoryAddressing,
+		RegisterOrMemoryAddressing,
+		Condition,
+		AccumulatorWithImmediateValue,
+		ImmediateValueWithAccumulator,
+		ImmediateValue,
+		ImmediateValue1,
+		ImmediateValue3,
+		ImmediateMemoryAddressWithAccumulator,
+		RelativeValue,
+		ImmediateSegmentOffset
+	}
+}
