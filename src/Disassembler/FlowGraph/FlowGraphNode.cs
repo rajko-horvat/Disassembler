@@ -9,8 +9,10 @@ namespace Disassembler
 
 		private FlowGraphNodeTypeEnum nodeType;
 		private uint linearAddress;
+		private int ordinal = -1;
 		private FlowGraphLocalEnum requiredLocals = FlowGraphLocalEnum.None;
 		private FlowGraphLocalEnum definedLocals = FlowGraphLocalEnum.None;
+		private BDictionary<uint, FlowGraphNode> referenceNodes = new();
 
 		private List<int> switchValues = new();
 
@@ -29,11 +31,15 @@ namespace Disassembler
 
 		public uint LinearAddress { get => this.linearAddress; }
 
+		public int Ordinal { get => this.ordinal; set => this.ordinal = value; }
+
 		public FlowGraphNodeTypeEnum NodeType { get => this.nodeType; }
 
 		public FlowGraphLocalEnum RequiredLocals { get => this.requiredLocals; set => this.requiredLocals = value; }
 
 		public FlowGraphLocalEnum DefinedLocals { get => this.definedLocals; set => this.definedLocals = value; }
+
+		public BDictionary<uint, FlowGraphNode> ReferenceNodes { get => this.referenceNodes; }
 
 		public List<int> SwitchValues { get => this.switchValues; }
 

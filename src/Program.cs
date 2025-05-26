@@ -329,6 +329,7 @@ internal class Program
 		}
 		Console.WriteLine($"Maximum overlay size in bytes: 0x{iMaxOverlaySize:x4}");*/
 
+		// Emit flow graphs
 		if (mainProgram.Segments.ContainsKey(0x0))
 		{
 			ProgramSegment segment = mainProgram.Segments.GetValueByKey(0x0);

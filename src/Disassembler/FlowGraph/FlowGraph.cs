@@ -1,5 +1,6 @@
 ﻿using Disassembler.CPU;
 using IRB.Collections.Generic;
+using System.Collections;
 using System.Text;
 using System.Xml.Linq;
 
@@ -11,8 +12,9 @@ namespace Disassembler
 		private string name = "";
 
 		private FlowGraphNode? startNode = null;
-		private FlowGraphNode? endNode = null;
+		private BDictionary<uint, FlowGraphNode> endNodes = new();
 		private BDictionary<uint, FlowGraphNode> nodes = new();
+		private bool fnBPFrame = false;
 
 		private FlowGraphLocalEnum requiredLocals = FlowGraphLocalEnum.None;
 		// the compiler has these defined on the entry to the function
@@ -29,12 +31,9 @@ namespace Disassembler
 			this.name = name;
 
 			ConstructGraph();
-
-			// construct local requirements
-			for (int i = 0; i < this.nodes.Count; i++)
-			{
-				this.nodes[i].Value.SetLocalRequirements();
-			}
+			ConstructLocalRequirements();
+			DetermineFunctionBPFrame();
+			DetermineBasicLanguageConstructionBlocks();
 		}
 
 		public void ConstructGraph()
@@ -42,7 +41,7 @@ namespace Disassembler
 			Queue<FlowGraphNode> unprocessedNodes = new();
 
 			this.startNode = null;
-			this.endNode = null;
+			this.endNodes.Clear();
 			this.nodes.Clear();
 			this.requiredLocals = FlowGraphLocalEnum.None;
 			this.definedLocals = FlowGraphLocalEnum.None;
@@ -389,7 +388,7 @@ namespace Disassembler
 							for (int i = 1; i < instruction.Parameters.Count; i++)
 							{
 								newNode.SwitchValues.Add((int)instruction.Parameters[i].Value);
-								newNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, (uint)instruction.Parameters[i].Displacement), 
+								newNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, (uint)instruction.Parameters[i].Displacement),
 									FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 							}
 						}
@@ -403,32 +402,60 @@ namespace Disassembler
 
 					case CPUInstructionEnum.CALL:
 						currentNode.AsmInstructions.Add(instruction);
+						if (instructionPos + 1 < instructionCount)
+						{
+							newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+							currentNode.ChildNodes.Add(newNode);
+						}
+
+						blockEnd = true;
 						break;
 
 					case CPUInstructionEnum.CALLF:
 						currentNode.AsmInstructions.Add(instruction);
+						if (instructionPos + 1 < instructionCount)
+						{
+							newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+							currentNode.ChildNodes.Add(newNode);
+						}
+
+						blockEnd = true;
 						break;
 
 					case CPUInstructionEnum.CallOverlay:
 						currentNode.AsmInstructions.Add(instruction);
+						if (instructionPos + 1 < instructionCount)
+						{
+							newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+							currentNode.ChildNodes.Add(newNode);
+						}
+
+						blockEnd = true;
 						break;
 
 					case CPUInstructionEnum.INT:
 						currentNode.AsmInstructions.Add(instruction);
+						if (instructionPos + 1 < instructionCount)
+						{
+							newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+							currentNode.ChildNodes.Add(newNode);
+						}
+
+						blockEnd = true;
 						break;
 
 					case CPUInstructionEnum.RET:
 					case CPUInstructionEnum.RETF:
 					case CPUInstructionEnum.IRET:
-						if (this.endNode != null)
+						if (this.endNodes.ContainsKey(instruction.LinearAddress))
 						{
-							currentNode.ChildNodes.Add(this.endNode);
+							currentNode.ChildNodes.Add(this.endNodes.GetValueByKey(instruction.LinearAddress));
 						}
 						else
 						{
 							newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.End, unprocessedNodes, false);
 							newNode.AsmInstructions.Add(instruction);
-							this.endNode = newNode;
+							this.endNodes.Add(newNode.LinearAddress, newNode);
 							currentNode.ChildNodes.Add(newNode);
 						}
 
@@ -467,6 +494,92 @@ namespace Disassembler
 				{
 					instruction = this.parent.AsmInstructions[instructionPos];
 				}
+			}
+
+			// update node references
+			for (int i = 0; i < this.nodes.Count; i++)
+			{
+				this.nodes[i].Value.ReferenceNodes.Clear();
+			}
+
+			for (int i = 0; i < this.nodes.Count; i++)
+			{
+				FlowGraphNode node = this.nodes[i].Value;
+
+				for (int j = 0; j < node.ChildNodes.Count; j++)
+				{
+					FlowGraphNode childNode = node.ChildNodes[j];
+
+					this.nodes.GetValueByKey(childNode.LinearAddress).ReferenceNodes.Add(node.LinearAddress, node);
+				}
+			}
+
+			// we want to order the nodes by their physical address for a purpose of assigning a unique ordinal number
+			int ordinal = 0;
+			FlowGraphNode[] sortedNodes = this.nodes.Values.ToArray();
+
+			Array.Sort<FlowGraphNode>(sortedNodes, (item1, item2) => item1.LinearAddress.CompareTo(item2.LinearAddress));
+
+			for (int i = 0; i < sortedNodes.Length; i++)
+			{
+				sortedNodes[i].Ordinal = ordinal++;
+			}
+		}
+
+		private void ConstructLocalRequirements()
+		{
+			// construct local node requirements
+			for (int i = 0; i < this.nodes.Count; i++)
+			{
+				this.nodes[i].Value.SetLocalRequirements();
+			}
+		}
+
+		private void DetermineFunctionBPFrame()
+		{
+			if (this.startNode != null && this.endNodes.Count == 1)
+			{
+				FlowGraphNode startNode = this.startNode;
+				FlowGraphNode endNode = this.endNodes[0].Value;
+				int endNodeInstructionCount = endNode.AsmInstructions.Count;
+				CPUInstruction instruction;
+
+				if (startNode.AsmInstructions.Count > 4 && endNode.AsmInstructions.Count > 1 &&
+					(instruction = startNode.AsmInstructions[0]).InstructionType == CPUInstructionEnum.PUSH &&
+					instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+					instruction.Parameters.Count == 1 &&
+					instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+					instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
+
+					(instruction = startNode.AsmInstructions[1]).InstructionType == CPUInstructionEnum.MOV &&
+					instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+					instruction.Parameters.Count == 2 &&
+					instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+					instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
+					instruction.Parameters[1].Type == CPUParameterTypeEnum.Register &&
+					instruction.Parameters[1].Value == (uint)CPURegisterEnum.SP &&
+
+					(instruction = endNode.AsmInstructions[endNodeInstructionCount - 2]).InstructionType == CPUInstructionEnum.POP &&
+					instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+					instruction.Parameters.Count == 1 &&
+					instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+					instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
+
+					((instruction = endNode.AsmInstructions[endNodeInstructionCount - 1]).InstructionType == CPUInstructionEnum.RETF ||
+					instruction.InstructionType == CPUInstructionEnum.IRET ||
+					instruction.InstructionType == CPUInstructionEnum.RET))
+				{
+					// function sathisfies basic C language frame
+					this.fnBPFrame = true;
+				}
+			}
+		}
+
+		private void DetermineBasicLanguageConstructionBlocks()
+		{
+			if (this.fnBPFrame)
+			{
+
 			}
 		}
 
@@ -1477,10 +1590,12 @@ namespace Disassembler
 
 		public FlowGraphNode? StartNode { get => this.startNode; set => this.startNode = value; }
 
-		public FlowGraphNode? EndNode { get => this.endNode; set => this.endNode = value; }
+		public BDictionary<uint, FlowGraphNode> EndNodes { get => this.endNodes; set => this.endNodes = value; }
 
 		public FlowGraphLocalEnum RequiredLocals { get => this.requiredLocals; set => this.requiredLocals = value; }
 
 		public FlowGraphLocalEnum DefinedLocals { get => this.definedLocals; set => this.definedLocals = value; }
+
+		public bool BPFrame { get => this.fnBPFrame; }
 	}
 }

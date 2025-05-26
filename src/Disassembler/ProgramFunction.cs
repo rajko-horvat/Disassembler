@@ -3300,13 +3300,14 @@ namespace Disassembler
 							}
 							else
 							{
-								writer.WriteLine($"{GetTabs(tabLevel + 1)}{0}();", function1.Name);
+								writer.WriteLine($"{GetTabs(tabLevel + 1)}{function1.Name}();");
 							}
 						}
 						else
 						{
 							throw new Exception($"Can't find function 'F{asmInstruction.Parameters[0].Value}_0000_{asmInstruction.Parameters[1].Value:x4}'");
 						}
+
 						writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oCPU.PopUInt32(); // stack management - pop return offset and segment");
 						if (verbosity > 0)
 						{
