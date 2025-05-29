@@ -311,7 +311,7 @@ internal class Program
 		{
 			ProgramSegment segment = mainProgram.Segments.GetValueByKey(segmentOffsets[i]);
 
-			segment.WriteAsmCS(codePath, 0);
+			segment.WriteAsmCS(codePath, 1);
 
 			objectWriter.WriteLine($"private {segment.ToString()} o{segment.ToString()};");
 			initWriter.WriteLine($"this.o{segment.ToString()} = new {segment.ToString()}(this);");

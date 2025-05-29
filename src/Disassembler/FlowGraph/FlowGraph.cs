@@ -33,7 +33,11 @@ namespace Disassembler
 			ConstructGraph();
 			ConstructLocalRequirements();
 			DetermineFunctionBPFrame();
-			DetermineBasicLanguageConstructionBlocks();
+
+			if (this.fnBPFrame)
+			{
+				DetermineBasicLanguageConstructionBlocks();
+			}
 		}
 
 		public void ConstructGraph()
@@ -56,418 +60,502 @@ namespace Disassembler
 
 			this.startNode = CreateOrFindNode(0, FlowGraphNodeTypeEnum.Start, unprocessedNodes, false);
 
-			CPUInstruction instruction = this.parent.AsmInstructions[instructionPos];
 			FlowGraphNode currentNode = CreateOrFindNode(this.parent.FunctionEntryPoint, FlowGraphNodeTypeEnum.Block, unprocessedNodes, false);
 
 			this.startNode.ChildNodes.Add(currentNode);
 
 			while (instructionPos >= 0 && instructionPos < instructionCount)
 			{
+				CPUInstruction instruction = this.parent.AsmInstructions[instructionPos];
 				CPUParameter parameter;
 				FlowGraphNode newNode;
 				bool blockEnd = false;
 
-				if (instruction.Label && !this.nodes.ContainsKey(instruction.LinearAddress))
+				if (instruction.Label)
 				{
-					newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, false);
-					currentNode.ChildNodes.Add(newNode);
-					currentNode = newNode;
+					if (!this.nodes.ContainsKey(instruction.LinearAddress))
+					{
+						newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+						currentNode.ChildNodes.Add(newNode);
+
+						blockEnd = true;
+					}
+					else if (currentNode.LinearAddress != instruction.LinearAddress)
+					{
+						currentNode.ChildNodes.Add(this.nodes.GetValueByKey(instruction.LinearAddress));
+
+						blockEnd = true;
+					}
 				}
 
-				switch (instruction.InstructionType)
+				if (!blockEnd)
 				{
-					// Arithmetic instructions
-					case CPUInstructionEnum.ADC:
-					case CPUInstructionEnum.SBB:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.ADD:
-					case CPUInstructionEnum.SUB:
-					case CPUInstructionEnum.AND:
-					case CPUInstructionEnum.OR:
-					case CPUInstructionEnum.XOR:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.DEC:
-					case CPUInstructionEnum.INC:
-					case CPUInstructionEnum.NEG:
-					case CPUInstructionEnum.NOT:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.DAS:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Multiply and divide instructions
-					case CPUInstructionEnum.MUL:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.IMUL:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.DIV:
-					case CPUInstructionEnum.IDIV:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Shifting instructions
-					case CPUInstructionEnum.SAR:
-					case CPUInstructionEnum.SHL:
-					case CPUInstructionEnum.SHR:
-					case CPUInstructionEnum.RCR:
-					case CPUInstructionEnum.RCL:
-					case CPUInstructionEnum.ROL:
-					case CPUInstructionEnum.ROR:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Converting instructions
-					case CPUInstructionEnum.CBW:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.CWD:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Compare and test instructions
-					case CPUInstructionEnum.CMP:
-					case CPUInstructionEnum.TEST:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Load segment and offset instructions
-					case CPUInstructionEnum.LDS:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.LES:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.LEA:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// String instructions
-					case CPUInstructionEnum.LODS:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.MOVS:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.OUTS:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.STOS:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Data move and convert instructions
-					case CPUInstructionEnum.MOV:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Ignored instructions
-					case CPUInstructionEnum.WAIT:
-					case CPUInstructionEnum.NOP:
-						break;
-
-					// BP based stack frame instructions
-					case CPUInstructionEnum.ENTER:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.LEAVE:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Stack instructions
-					case CPUInstructionEnum.POP:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.POPA:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.POPF:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.PUSH:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.PUSHA:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.PUSHF:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Flag instructions
-					case CPUInstructionEnum.CLD:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.STD:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.CLC:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.STC:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.CMC:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.CLI:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.STI:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Exchange data instruction
-					case CPUInstructionEnum.XCHG:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Input and output port instructions
-					case CPUInstructionEnum.IN:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					case CPUInstructionEnum.OUT:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Special syntetic functions
-					case CPUInstructionEnum.WordsToDword:
-						currentNode.AsmInstructions.Add(instruction);
-						break;
-
-					// Flow control instructions
-					case CPUInstructionEnum.Jcc:
-						if (!this.nodes.ContainsKey(instruction.LinearAddress))
-						{
-							newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.If, unprocessedNodes, false);
-							newNode.AsmInstructions.Add(instruction);
-							currentNode.ChildNodes.Add(newNode);
-
-							newNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[1].Value), FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
-
-							instructionPos++;
-							if (instructionPos < instructionCount)
-							{
-								instruction = this.parent.AsmInstructions[instructionPos];
-								newNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
-							}
-							else
-							{
-								throw new Exception($"Expected next instruction in {newNode.NodeType} block");
-							}
-						}
-						else
-						{
-							currentNode.ChildNodes.Add(this.nodes.GetValueByKey(instruction.LinearAddress));
-						}
-
-						blockEnd = true;
-						break;
-
-					case CPUInstructionEnum.JCXZ:
-						if (!this.nodes.ContainsKey(instruction.LinearAddress))
-						{
-							newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.If, unprocessedNodes, false);
-							newNode.AsmInstructions.Add(instruction);
-							currentNode.ChildNodes.Add(newNode);
-
-							newNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value), FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
-
-							instructionPos++;
-							if (instructionPos < instructionCount)
-							{
-								instruction = this.parent.AsmInstructions[instructionPos];
-								newNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
-							}
-							else
-							{
-								throw new Exception($"Expected next instruction in {newNode.NodeType} block");
-							}
-						}
-						else
-						{
-							currentNode.ChildNodes.Add(this.nodes.GetValueByKey(instruction.LinearAddress));
-						}
-
-						blockEnd = true;
-						break;
-
-					case CPUInstructionEnum.LOOP:
-						if (!this.nodes.ContainsKey(instruction.LinearAddress))
-						{
-							newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.If, unprocessedNodes, false);
-							newNode.AsmInstructions.Add(instruction);
-							currentNode.ChildNodes.Add(newNode);
-
-							newNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value), FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
-
-							instructionPos++;
-							if (instructionPos < instructionCount)
-							{
-								instruction = this.parent.AsmInstructions[instructionPos];
-								newNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
-							}
-							else
-							{
-								throw new Exception($"Expected next instruction in {newNode.NodeType} block");
-							}
-						}
-						else
-						{
-							currentNode.ChildNodes.Add(this.nodes.GetValueByKey(instruction.LinearAddress));
-						}
-
-						blockEnd = true;
-						break;
-
-					case CPUInstructionEnum.JMP:
-						parameter = instruction.Parameters[0];
-						if (parameter.Type == CPUParameterTypeEnum.Immediate)
-						{
-							newNode = CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value), FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
-							currentNode.ChildNodes.Add(newNode);
-						}
-						else
-						{
+					switch (instruction.InstructionType)
+					{
+						// Arithmetic instructions
+						case CPUInstructionEnum.ADC:
+						case CPUInstructionEnum.SBB:
 							currentNode.AsmInstructions.Add(instruction);
-						}
+							break;
 
-						blockEnd = true;
-						break;
-
-					case CPUInstructionEnum.JMPF:
-						parameter = instruction.Parameters[0];
-						if (parameter.Type == CPUParameterTypeEnum.SegmentOffset)
-						{
-							newNode = CreateOrFindNode(MainProgram.ToLinearAddress(parameter.Segment, parameter.Value), FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
-							currentNode.ChildNodes.Add(newNode);
-						}
-						else
-						{
+						case CPUInstructionEnum.ADD:
+						case CPUInstructionEnum.SUB:
+						case CPUInstructionEnum.AND:
+						case CPUInstructionEnum.OR:
+						case CPUInstructionEnum.XOR:
 							currentNode.AsmInstructions.Add(instruction);
-						}
+							break;
 
-						blockEnd = true;
-						break;
+						case CPUInstructionEnum.DEC:
+						case CPUInstructionEnum.INC:
+						case CPUInstructionEnum.NEG:
+						case CPUInstructionEnum.NOT:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
 
-					case CPUInstructionEnum.SWITCH:
-						if (!this.nodes.ContainsKey(instruction.LinearAddress))
-						{
-							newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Switch, unprocessedNodes, false);
-							newNode.AsmInstructions.Add(instruction);
-							currentNode.ChildNodes.Add(newNode);
+						case CPUInstructionEnum.DAS:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
 
-							for (int i = 1; i < instruction.Parameters.Count; i++)
+						// Multiply and divide instructions
+						case CPUInstructionEnum.MUL:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.IMUL:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.DIV:
+						case CPUInstructionEnum.IDIV:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Shifting instructions
+						case CPUInstructionEnum.SAR:
+						case CPUInstructionEnum.SHL:
+						case CPUInstructionEnum.SHR:
+						case CPUInstructionEnum.RCR:
+						case CPUInstructionEnum.RCL:
+						case CPUInstructionEnum.ROL:
+						case CPUInstructionEnum.ROR:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Converting instructions
+						case CPUInstructionEnum.CBW:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.CWD:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Compare and test instructions
+						case CPUInstructionEnum.CMP:
+						case CPUInstructionEnum.TEST:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Load segment and offset instructions
+						case CPUInstructionEnum.LDS:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.LES:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.LEA:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// String instructions
+						case CPUInstructionEnum.LODS:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.MOVS:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.OUTS:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.STOS:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Data move and convert instructions
+						case CPUInstructionEnum.MOV:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Ignored instructions
+						case CPUInstructionEnum.WAIT:
+						case CPUInstructionEnum.NOP:
+							break;
+
+						// BP based stack frame instructions
+						case CPUInstructionEnum.ENTER:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.LEAVE:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Stack instructions
+						case CPUInstructionEnum.POP:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.POPA:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.POPF:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.PUSH:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.PUSHA:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.PUSHF:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Flag instructions
+						case CPUInstructionEnum.CLD:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.STD:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.CLC:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.STC:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.CMC:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.CLI:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.STI:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Exchange data instruction
+						case CPUInstructionEnum.XCHG:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Input and output port instructions
+						case CPUInstructionEnum.IN:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						case CPUInstructionEnum.OUT:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Special syntetic functions
+						case CPUInstructionEnum.WordsToDword:
+							currentNode.AsmInstructions.Add(instruction);
+							break;
+
+						// Flow control instructions
+						case CPUInstructionEnum.Jcc:
+							if (currentNode.LinearAddress == instruction.LinearAddress)
 							{
-								newNode.SwitchValues.Add((int)instruction.Parameters[i].Value);
-								newNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, (uint)instruction.Parameters[i].Displacement),
+								currentNode.NodeType = FlowGraphNodeTypeEnum.If;
+								currentNode.AsmInstructions.Add(instruction);
+
+								currentNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[1].Value), 
 									FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
+
+								instructionPos++;
+								if (instructionPos < instructionCount)
+								{
+									instruction = this.parent.AsmInstructions[instructionPos];
+									currentNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
+								}
+								else
+								{
+									throw new Exception($"Expected next instruction in {currentNode.NodeType} block");
+								}
 							}
-						}
-						else
-						{
-							currentNode.ChildNodes.Add(this.nodes.GetValueByKey(instruction.LinearAddress));
-						}
+							else if (!this.nodes.ContainsKey(instruction.LinearAddress))
+							{
+								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.If, unprocessedNodes, false);
+								newNode.AsmInstructions.Add(instruction);
+								currentNode.ChildNodes.Add(newNode);
 
-						blockEnd = true;
-						break;
+								newNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[1].Value), 
+									FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 
-					case CPUInstructionEnum.CALL:
-						currentNode.AsmInstructions.Add(instruction);
-						if (instructionPos + 1 < instructionCount)
-						{
-							newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
-							currentNode.ChildNodes.Add(newNode);
-						}
+								instructionPos++;
+								if (instructionPos < instructionCount)
+								{
+									instruction = this.parent.AsmInstructions[instructionPos];
+									newNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
+								}
+								else
+								{
+									throw new Exception($"Expected next instruction in {newNode.NodeType} block");
+								}
+							}
+							else
+							{
+								currentNode.ChildNodes.Add(this.nodes.GetValueByKey(instruction.LinearAddress));
+							}
 
-						blockEnd = true;
-						break;
+							blockEnd = true;
+							break;
 
-					case CPUInstructionEnum.CALLF:
-						currentNode.AsmInstructions.Add(instruction);
-						if (instructionPos + 1 < instructionCount)
-						{
-							newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
-							currentNode.ChildNodes.Add(newNode);
-						}
+						case CPUInstructionEnum.JCXZ:
+							if (currentNode.LinearAddress == instruction.LinearAddress)
+							{
+								currentNode.NodeType = FlowGraphNodeTypeEnum.If;
+								currentNode.AsmInstructions.Add(instruction);
 
-						blockEnd = true;
-						break;
+								currentNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value),
+									FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 
-					case CPUInstructionEnum.CallOverlay:
-						currentNode.AsmInstructions.Add(instruction);
-						if (instructionPos + 1 < instructionCount)
-						{
-							newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
-							currentNode.ChildNodes.Add(newNode);
-						}
+								instructionPos++;
+								if (instructionPos < instructionCount)
+								{
+									instruction = this.parent.AsmInstructions[instructionPos];
+									currentNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
+								}
+								else
+								{
+									throw new Exception($"Expected next instruction in {currentNode.NodeType} block");
+								}
+							}
+							else if (!this.nodes.ContainsKey(instruction.LinearAddress))
+							{
+								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.If, unprocessedNodes, false);
+								newNode.AsmInstructions.Add(instruction);
+								currentNode.ChildNodes.Add(newNode);
 
-						blockEnd = true;
-						break;
+								newNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value), 
+									FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 
-					case CPUInstructionEnum.INT:
-						currentNode.AsmInstructions.Add(instruction);
-						if (instructionPos + 1 < instructionCount)
-						{
-							newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
-							currentNode.ChildNodes.Add(newNode);
-						}
+								instructionPos++;
+								if (instructionPos < instructionCount)
+								{
+									instruction = this.parent.AsmInstructions[instructionPos];
+									newNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
+								}
+								else
+								{
+									throw new Exception($"Expected next instruction in {newNode.NodeType} block");
+								}
+							}
+							else
+							{
+								currentNode.ChildNodes.Add(this.nodes.GetValueByKey(instruction.LinearAddress));
+							}
 
-						blockEnd = true;
-						break;
+							blockEnd = true;
+							break;
 
-					case CPUInstructionEnum.RET:
-					case CPUInstructionEnum.RETF:
-					case CPUInstructionEnum.IRET:
-						if (this.endNodes.ContainsKey(instruction.LinearAddress))
-						{
-							currentNode.ChildNodes.Add(this.endNodes.GetValueByKey(instruction.LinearAddress));
-						}
-						else
-						{
-							newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.End, unprocessedNodes, false);
-							newNode.AsmInstructions.Add(instruction);
-							this.endNodes.Add(newNode.LinearAddress, newNode);
-							currentNode.ChildNodes.Add(newNode);
-						}
+						case CPUInstructionEnum.LOOP:
+							if (currentNode.LinearAddress == instruction.LinearAddress)
+							{
+								currentNode.NodeType = FlowGraphNodeTypeEnum.If;
+								currentNode.AsmInstructions.Add(instruction);
 
-						blockEnd = true;
-						break;
+								currentNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value), 
+									FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 
-					default:
-						Console.WriteLine($"Unexpected instruction type '{instruction.InstructionType}'");
-						break;
+								instructionPos++;
+								if (instructionPos < instructionCount)
+								{
+									instruction = this.parent.AsmInstructions[instructionPos];
+									currentNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
+								}
+								else
+								{
+									throw new Exception($"Expected next instruction in {currentNode.NodeType} block");
+								}
+							}
+							else if (!this.nodes.ContainsKey(instruction.LinearAddress))
+							{
+								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.If, unprocessedNodes, false);
+								newNode.AsmInstructions.Add(instruction);
+								currentNode.ChildNodes.Add(newNode);
+
+								newNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value), 
+									FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
+
+								instructionPos++;
+								if (instructionPos < instructionCount)
+								{
+									instruction = this.parent.AsmInstructions[instructionPos];
+									newNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
+								}
+								else
+								{
+									throw new Exception($"Expected next instruction in {newNode.NodeType} block");
+								}
+							}
+							else
+							{
+								currentNode.ChildNodes.Add(this.nodes.GetValueByKey(instruction.LinearAddress));
+							}
+
+							blockEnd = true;
+							break;
+
+						case CPUInstructionEnum.JMP:
+							parameter = instruction.Parameters[0];
+							if (parameter.Type == CPUParameterTypeEnum.Immediate)
+							{
+								newNode = CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value), 
+									FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+								currentNode.ChildNodes.Add(newNode);
+							}
+							else
+							{
+								currentNode.AsmInstructions.Add(instruction);
+							}
+
+							blockEnd = true;
+							break;
+
+						case CPUInstructionEnum.JMPF:
+							parameter = instruction.Parameters[0];
+							if (parameter.Type == CPUParameterTypeEnum.SegmentOffset)
+							{
+								newNode = CreateOrFindNode(MainProgram.ToLinearAddress(parameter.Segment, parameter.Value), FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+								currentNode.ChildNodes.Add(newNode);
+							}
+							else
+							{
+								currentNode.AsmInstructions.Add(instruction);
+							}
+
+							blockEnd = true;
+							break;
+
+						case CPUInstructionEnum.SWITCH:
+							if (currentNode.LinearAddress == instruction.LinearAddress)
+							{
+								currentNode.NodeType = FlowGraphNodeTypeEnum.Switch;
+								currentNode.AsmInstructions.Add(instruction);
+
+								for (int i = 1; i < instruction.Parameters.Count; i++)
+								{
+									currentNode.SwitchValues.Add((int)instruction.Parameters[i].Value);
+									currentNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, (uint)instruction.Parameters[i].Displacement),
+										FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
+								}
+							}
+							else if (!this.nodes.ContainsKey(instruction.LinearAddress))
+							{
+								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Switch, unprocessedNodes, false);
+								newNode.AsmInstructions.Add(instruction);
+								currentNode.ChildNodes.Add(newNode);
+
+								for (int i = 1; i < instruction.Parameters.Count; i++)
+								{
+									newNode.SwitchValues.Add((int)instruction.Parameters[i].Value);
+									newNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, (uint)instruction.Parameters[i].Displacement),
+										FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
+								}
+							}
+							else
+							{
+								currentNode.ChildNodes.Add(this.nodes.GetValueByKey(instruction.LinearAddress));
+							}
+
+							blockEnd = true;
+							break;
+
+						case CPUInstructionEnum.CALL:
+							currentNode.AsmInstructions.Add(instruction);
+							if (instructionPos + 1 < instructionCount)
+							{
+								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+								currentNode.ChildNodes.Add(newNode);
+							}
+
+							blockEnd = true;
+							break;
+
+						case CPUInstructionEnum.CALLF:
+							currentNode.AsmInstructions.Add(instruction);
+							if (instructionPos + 1 < instructionCount)
+							{
+								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+								currentNode.ChildNodes.Add(newNode);
+							}
+
+							blockEnd = true;
+							break;
+
+						case CPUInstructionEnum.CallOverlay:
+							currentNode.AsmInstructions.Add(instruction);
+							if (instructionPos + 1 < instructionCount)
+							{
+								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+								currentNode.ChildNodes.Add(newNode);
+							}
+
+							blockEnd = true;
+							break;
+
+						case CPUInstructionEnum.INT:
+							currentNode.AsmInstructions.Add(instruction);
+							if (instructionPos + 1 < instructionCount)
+							{
+								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+								currentNode.ChildNodes.Add(newNode);
+							}
+
+							blockEnd = true;
+							break;
+
+						case CPUInstructionEnum.RET:
+						case CPUInstructionEnum.RETF:
+						case CPUInstructionEnum.IRET:
+							if (this.endNodes.ContainsKey(instruction.LinearAddress))
+							{
+								currentNode.ChildNodes.Add(this.endNodes.GetValueByKey(instruction.LinearAddress));
+							}
+							else
+							{
+								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.End, unprocessedNodes, false);
+								newNode.AsmInstructions.Add(instruction);
+								this.endNodes.Add(newNode.LinearAddress, newNode);
+								currentNode.ChildNodes.Add(newNode);
+							}
+
+							blockEnd = true;
+							break;
+
+						default:
+							Console.WriteLine($"Unexpected instruction type '{instruction.InstructionType}'");
+							break;
+					}
 				}
-
-				instructionPos++;
 
 				if (blockEnd || instructionPos >= instructionCount)
 				{
@@ -485,14 +573,13 @@ namespace Disassembler
 								throw new Exception($"Expected next instruction in {node.NodeType} block");
 							}
 							currentNode = node;
-							instruction = this.parent.AsmInstructions[instructionPos];
 							break;
 						}
 					}
 				}
 				else
 				{
-					instruction = this.parent.AsmInstructions[instructionPos];
+					instructionPos++;
 				}
 			}
 
@@ -541,8 +628,19 @@ namespace Disassembler
 			{
 				FlowGraphNode startNode = this.startNode;
 				FlowGraphNode endNode = this.endNodes[0].Value;
-				int endNodeInstructionCount = endNode.AsmInstructions.Count;
 				CPUInstruction instruction;
+
+				if (startNode.ReferenceNodes.Count == 0 && startNode.ChildNodes.Count == 1)
+				{
+					startNode = startNode.ChildNodes[0];
+				}
+
+				if (endNode.ReferenceNodes.Count == 1)
+				{
+					endNode = endNode.ReferenceNodes[0].Value;
+				}
+
+				int endNodeInstructionCount = endNode.AsmInstructions.Count;
 
 				if (startNode.AsmInstructions.Count > 4 && endNode.AsmInstructions.Count > 1 &&
 					(instruction = startNode.AsmInstructions[0]).InstructionType == CPUInstructionEnum.PUSH &&
@@ -559,15 +657,11 @@ namespace Disassembler
 					instruction.Parameters[1].Type == CPUParameterTypeEnum.Register &&
 					instruction.Parameters[1].Value == (uint)CPURegisterEnum.SP &&
 
-					(instruction = endNode.AsmInstructions[endNodeInstructionCount - 2]).InstructionType == CPUInstructionEnum.POP &&
+					(instruction = endNode.AsmInstructions[endNodeInstructionCount - 1]).InstructionType == CPUInstructionEnum.POP &&
 					instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
 					instruction.Parameters.Count == 1 &&
 					instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
-					instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
-
-					((instruction = endNode.AsmInstructions[endNodeInstructionCount - 1]).InstructionType == CPUInstructionEnum.RETF ||
-					instruction.InstructionType == CPUInstructionEnum.IRET ||
-					instruction.InstructionType == CPUInstructionEnum.RET))
+					instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP)
 				{
 					// function sathisfies basic C language frame
 					this.fnBPFrame = true;
@@ -577,9 +671,20 @@ namespace Disassembler
 
 		private void DetermineBasicLanguageConstructionBlocks()
 		{
-			if (this.fnBPFrame)
+			if (this.startNode != null)
 			{
+				FlowGraphNode blockStartNode = this.startNode;
+				FlowGraphNode blockEndNode;
 
+				while (blockStartNode.NodeType != FlowGraphNodeTypeEnum.End)
+				{
+					if (blockStartNode.ReferenceNodes.Count > 0)
+					{
+						break;
+					}
+
+					blockStartNode = blockStartNode.ChildNodes[0];
+				}
 			}
 		}
 

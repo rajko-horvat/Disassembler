@@ -489,9 +489,7 @@ namespace Disassembler
 			for (int i = 0; i < this.asmInstructions.Count; i++)
 			{
 				CPUInstruction instruction = this.asmInstructions[i];
-				CPUParameter parameter;
-				uint newAddress;
-				uint newAddress2;
+				CPUParameter parameter0;
 
 				switch (instruction.InstructionType)
 				{
@@ -500,43 +498,92 @@ namespace Disassembler
 					case CPUInstructionEnum.LOOPNE:
 					case CPUInstructionEnum.JCXZ:
 					case CPUInstructionEnum.JMP:
-						parameter = instruction.Parameters[0];
+					case CPUInstructionEnum.JMPF:
+						parameter0 = instruction.Parameters[0];
 
-						if (parameter.Type == CPUParameterTypeEnum.Immediate)
+						if (parameter0.Type == CPUParameterTypeEnum.Immediate || parameter0.Type == CPUParameterTypeEnum.SegmentOffset)
 						{
-							CPUInstruction instruction1;
-							newAddress = (uint)(fnSegment + parameter.Value);
-
 							// optimize immediate jumps
-							newAddress2 = newAddress;
-							while ((instruction1 = this.asmInstructions[GetInstructionPositionByLinearAddress(newAddress2)]).InstructionType == CPUInstructionEnum.JMP)
+							CPUInstruction instruction1;
+							ushort segment;
+							uint address;
+
+							if (parameter0.Type == CPUParameterTypeEnum.Immediate)
 							{
-								newAddress2 = (uint)(fnSegment + instruction1.Parameters[0].Value);
+								segment = instruction.Segment;
+								address = (uint)(fnSegment + parameter0.Value);
 							}
-							if (newAddress != newAddress2)
+							else
 							{
-								parameter.Value = (ushort)(newAddress2 - fnSegment);
+								segment = parameter0.Segment;
+								address = MainProgram.ToLinearAddress(parameter0.Segment, parameter0.Value);
+							}
+
+							if (instruction.InstructionType != CPUInstructionEnum.JMPF || address != 0)
+							{
+								uint newAddress = address;
+								ushort newSegment = segment;
+
+								while ((instruction1 = this.asmInstructions[GetInstructionPositionByLinearAddress(newAddress)]).InstructionType == CPUInstructionEnum.JMP ||
+									instruction1.InstructionType == CPUInstructionEnum.JMPF)
+								{
+									CPUParameter parameter1 = instruction1.Parameters[0];
+
+									if (parameter1.Type == CPUParameterTypeEnum.Immediate)
+									{
+										newSegment = instruction1.Segment;
+										newAddress = MainProgram.ToLinearAddress(newSegment, instruction1.Parameters[0].Value);
+									}
+									else if (parameter1.Type == CPUParameterTypeEnum.SegmentOffset)
+									{
+										newSegment = instruction1.Parameters[0].Segment;
+										newAddress = MainProgram.ToLinearAddress(newSegment, instruction1.Parameters[0].Value);
+									}
+									else
+									{
+										break;
+									}
+
+									if (instruction1.InstructionType == CPUInstructionEnum.JMPF && newAddress == 0)
+										break;
+								}
+
+								if (address != newAddress)
+								{
+									if (segment != newSegment)
+									{
+										instruction.InstructionType = CPUInstructionEnum.JMPF;
+										instruction.Parameters.Clear();
+										instruction.Parameters.Add(new CPUParameter(newSegment, newAddress - MainProgram.ToLinearAddress(newSegment, 0)));
+									}
+									else
+									{
+										instruction.InstructionType = CPUInstructionEnum.JMP;
+										instruction.Parameters.Clear();
+										instruction.Parameters.Add(new CPUParameter(CPUParameterTypeEnum.Immediate, newAddress - MainProgram.ToLinearAddress(newSegment, 0)));
+									}
+								}
 							}
 						}
 						break;
 
 					case CPUInstructionEnum.Jcc:
-						parameter = instruction.Parameters[1];
+						parameter0 = instruction.Parameters[1];
 
-						if (parameter.Type == CPUParameterTypeEnum.Immediate)
+						if (parameter0.Type == CPUParameterTypeEnum.Immediate)
 						{
-							CPUInstruction instruction1;
-							newAddress = (uint)(fnSegment + parameter.Value);
-
 							// optimize immediate jumps
-							newAddress2 = newAddress;
-							while ((instruction1 = this.asmInstructions[GetInstructionPositionByLinearAddress(newAddress2)]).InstructionType == CPUInstructionEnum.JMP)
+							CPUInstruction instruction1;
+							uint address = (uint)(fnSegment + parameter0.Value);
+							uint newAddress = address;
+
+							while ((instruction1 = this.asmInstructions[GetInstructionPositionByLinearAddress(newAddress)]).InstructionType == CPUInstructionEnum.JMP)
 							{
-								newAddress2 = (uint)(fnSegment + instruction1.Parameters[0].Value);
+								newAddress = (uint)(fnSegment + instruction1.Parameters[0].Value);
 							}
-							if (newAddress != newAddress2)
+							if (address != newAddress)
 							{
-								parameter.Value = (ushort)(newAddress2 - fnSegment);
+								parameter0.Value = (ushort)(newAddress - fnSegment);
 							}
 						}
 						break;
@@ -585,41 +632,56 @@ namespace Disassembler
 			{
 				CPUInstruction instruction = this.asmInstructions[i];
 				CPUParameter parameter;
-				ushort usNewOffset;
+				uint newAddress;
 
 				switch (instruction.InstructionType)
 				{
 					case CPUInstructionEnum.JMP:
 						parameter = instruction.Parameters[0];
+
 						if (parameter.Type == CPUParameterTypeEnum.Immediate)
 						{
-							usNewOffset = (ushort)parameter.Value;
+							newAddress = (uint)(fnSegment + parameter.Value);
 
 							// optimize immediate jumps
 							if (i + 1 < this.asmInstructions.Count &&
-								this.asmInstructions[i + 1].Offset == usNewOffset)
+								this.asmInstructions[i + 1].LinearAddress == newAddress)
 							{
 								// this is just a jump to next instruction, ignore it
 								this.asmInstructions[i].InstructionType = CPUInstructionEnum.NOP;
 							}
 							else
 							{
-								this.asmInstructions[GetInstructionPositionByLinearAddress((uint)(fnSegment + usNewOffset))].Label = true;
+								this.asmInstructions[GetInstructionPositionByLinearAddress(newAddress)].Label = true;
+							}
+						}
+						break;
+
+					case CPUInstructionEnum.JMPF:
+						parameter = instruction.Parameters[0];
+
+						if (parameter.Type == CPUParameterTypeEnum.SegmentOffset)
+						{
+							newAddress = MainProgram.ToLinearAddress(parameter.Segment, parameter.Value);
+
+							if (newAddress != 0)
+							{
+								this.asmInstructions[GetInstructionPositionByLinearAddress(newAddress)].Label = true;
 							}
 						}
 						break;
 
 					case CPUInstructionEnum.Jcc:
-						usNewOffset = (ushort)instruction.Parameters[1].Value;
-						this.asmInstructions[GetInstructionPositionByLinearAddress((uint)(fnSegment + usNewOffset))].Label = true;
+						newAddress = (ushort)instruction.Parameters[1].Value;
+						this.asmInstructions[GetInstructionPositionByLinearAddress((uint)(fnSegment + newAddress))].Label = true;
 						break;
 
 					case CPUInstructionEnum.LOOP:
 					case CPUInstructionEnum.LOOPE:
 					case CPUInstructionEnum.LOOPNE:
 					case CPUInstructionEnum.JCXZ:
-						usNewOffset = (ushort)(instruction.Parameters[0].Value & 0xffff);
-						this.asmInstructions[GetInstructionPositionByLinearAddress((uint)(fnSegment + usNewOffset))].Label = true;
+						newAddress = (ushort)(instruction.Parameters[0].Value & 0xffff);
+						this.asmInstructions[GetInstructionPositionByLinearAddress((uint)(fnSegment + newAddress))].Label = true;
 						break;
 
 					case CPUInstructionEnum.SWITCH:
@@ -733,9 +795,10 @@ namespace Disassembler
 						break;
 
 					case CPUInstructionEnum.JMP:
+					case CPUInstructionEnum.JMPF:
 						if (i + 1 < this.asmInstructions.Count &&
-							this.asmInstructions[i].InstructionType == CPUInstructionEnum.JMP &&
-							(instruction1 = this.asmInstructions[i + 1]).InstructionType == CPUInstructionEnum.JMP &&
+							((instruction1 = this.asmInstructions[i + 1]).InstructionType == CPUInstructionEnum.JMP ||
+							instruction1.InstructionType == CPUInstructionEnum.JMPF) &&
 							!instruction1.Label)
 						{
 							this.asmInstructions.RemoveAt(i + 1);
@@ -918,6 +981,17 @@ namespace Disassembler
 			#endregion
 
 			#region Assign ordinals to labels
+
+			if (this.asmInstructions.Count > 0 && this.fnEntryPoint != this.asmInstructions[0].LinearAddress)
+			{
+				CPUInstruction? instruction = GetInstructionByLinearAddress(this.fnEntryPoint);
+
+				if (instruction != null)
+				{
+					instruction.Label = true;
+				}
+			}
+
 			int labelOrdinal = 1;
 
 			for (int i = 0; i < this.asmInstructions.Count; i++)
@@ -2544,6 +2618,11 @@ namespace Disassembler
 			writer.WriteLine(")");
 			writer.WriteLine($"{GetTabs(tabLevel)}{{");
 
+			if (this.flowGraph != null)
+			{
+				writer.WriteLine($"{GetTabs(tabLevel + 1)}// {(this.flowGraph.BPFrame ? "Standard C frame" : "Assembly")}");
+			}
+
 			if (verbosity > 0)
 			{
 				writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oCPU.Log.EnterBlock(\"'{this.Name}'({this.callType.ToString()}) at {this.parent.ToString()}:0x{this.fnOffset:x}\");");
@@ -2570,6 +2649,12 @@ namespace Disassembler
 
 			writer.WriteLine();
 			writer.WriteLine($"{GetTabs(tabLevel + 1)}// function body");
+
+			if (this.asmInstructions.Count > 0 && this.fnEntryPoint != this.asmInstructions[0].LinearAddress)
+			{
+				writer.WriteLine($"{GetTabs(tabLevel + 1)}goto {GetInstructionByLinearAddress(this.fnEntryPoint)?.LabelName};");
+			}
+
 			for (int k = 0; k < this.asmInstructions.Count; k++)
 			{
 				// writer.WriteLine("{GetTabs(tabLevel)}{0}\t{1}", function.Instructions[j].Location.ToString(), function.Instructions[j]);

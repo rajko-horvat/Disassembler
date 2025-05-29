@@ -33,7 +33,7 @@ namespace Disassembler
 
 		public int Ordinal { get => this.ordinal; set => this.ordinal = value; }
 
-		public FlowGraphNodeTypeEnum NodeType { get => this.nodeType; }
+		public FlowGraphNodeTypeEnum NodeType { get => this.nodeType; set => this.nodeType = value; }
 
 		public FlowGraphLocalEnum RequiredLocals { get => this.requiredLocals; set => this.requiredLocals = value; }
 
