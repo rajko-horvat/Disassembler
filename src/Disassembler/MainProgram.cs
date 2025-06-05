@@ -59,9 +59,11 @@ namespace Disassembler
 									ProgramSegment fnSegment = FindOrCreateSegment(overlay, segment);
 									ProgramFunction function = new ProgramFunction(fnSegment, offset, sName);
 
+									function.IsLibraryFunction = true;
+
 									fnSegment.Functions.Add(offset, function);
 
-									Console.WriteLine($"Adding undefined API function {function.Parent.ToString()}.{function.Name}()");
+									Console.WriteLine($"Adding undefined API function {function.Segment.ToString()}.{function.Name}()");
 
 									return function;
 								}

@@ -21,7 +21,7 @@ namespace Disassembler
 		{
 			StringBuilder sb = new StringBuilder();
 
-			sb.Append($"this.oParent.{this.parent.Parent.ToString()}.{this.parent.Name}(");
+			sb.Append($"this.oParent.{this.parent.Segment.ToString()}.{this.parent.Name}(");
 
 			for (int i = 0; i < this.parameters.Count; i++)
 			{

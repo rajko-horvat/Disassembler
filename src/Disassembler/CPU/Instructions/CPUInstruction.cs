@@ -795,105 +795,137 @@ namespace Disassembler.CPU
 				case CPUInstructionEnum.AAA:
 					sbValue.Append("AAA");
 					break;
+
 				case CPUInstructionEnum.AAD:
 					sbValue.Append("AAD");
 					break;
+
 				case CPUInstructionEnum.AAM:
 					sbValue.Append("AAM");
 					break;
+
 				case CPUInstructionEnum.AAS:
 					sbValue.Append("AAS");
 					break;
+
 				case CPUInstructionEnum.ADC:
 					sbValue.AppendFormat("ADC {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.ADD:
 					sbValue.AppendFormat("ADD {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.AND:
 					sbValue.AppendFormat("AND {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.ARPL:
 					sbValue.AppendFormat("ARPL {0}, {1}", this.aParameters[1].ToString(), this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.BOUND:
 					sbValue.AppendFormat("BOUND {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.BSF:
 					sbValue.AppendFormat("BSF {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.BSR:
 					sbValue.AppendFormat("BSR {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.BSWAP:
 					sbValue.AppendFormat("BSWAP {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.BT:
 					sbValue.AppendFormat("BT {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.BTC:
 					sbValue.AppendFormat("BTC {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.BTR:
 					sbValue.AppendFormat("BTR {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.BTS:
 					sbValue.AppendFormat("BTS {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.CALL:
 					sbValue.AppendFormat("CALL {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.CALLF:
 					sbValue.AppendFormat("CALL far {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.CBW:
 					if (this.eOperandSize == CPUParameterSizeEnum.UInt16)
 						sbValue.Append("CBW");
 					else
 						sbValue.Append("CWDE");
 					break;
+
 				case CPUInstructionEnum.CLC:
 					sbValue.Append("CLC");
 					break;
+
 				case CPUInstructionEnum.CLD:
 					sbValue.Append("CLD");
 					break;
+
 				case CPUInstructionEnum.CLI:
 					sbValue.Append("CLI");
 					break;
+
 				case CPUInstructionEnum.CLTS:
 					sbValue.Append("CLTS");
 					break;
+
 				case CPUInstructionEnum.CMC:
 					sbValue.Append("CMC");
 					break;
+
 				case CPUInstructionEnum.CMP:
 					sbValue.AppendFormat("CMP {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.CMPS:
 					sbValue.AppendFormat("CMPS{0}", GetSizeSuffix());
 					break;
+
 				case CPUInstructionEnum.CWD:
 					if (this.eOperandSize == CPUParameterSizeEnum.UInt16)
 						sbValue.Append("CWD");
 					else
 						sbValue.Append("CDQ");
 					break;
+
 				case CPUInstructionEnum.DAA:
 					sbValue.Append("DAA");
 					break;
+
 				case CPUInstructionEnum.DAS:
 					sbValue.Append("DAS");
 					break;
+
 				case CPUInstructionEnum.DEC:
 					sbValue.AppendFormat("DEC {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.DIV:
 					sbValue.AppendFormat("DIV {0}, {1}", oAcc.ToString(), this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.ENTER:
 					sbValue.AppendFormat("ENTER {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.F2XM1:
 				case CPUInstructionEnum.FABS:
 				case CPUInstructionEnum.FADD:
@@ -969,9 +1001,11 @@ namespace Disassembler.CPU
 				case CPUInstructionEnum.FYL2XP1:
 					sbValue.Append(Enum.GetName(typeof(CPUInstructionEnum), this.eInstruction));
 					break;
+
 				case CPUInstructionEnum.HLT:
 					sbValue.Append("HLT");
 					break;
+
 				case CPUInstructionEnum.IDIV:
 					sbValue.Append("IDIV ");
 					if (this.eOperandSize == CPUParameterSizeEnum.UInt8)
@@ -979,6 +1013,7 @@ namespace Disassembler.CPU
 					else
 						sbValue.AppendFormat("{0}, {1}", oAcc.ToString(), this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.IMUL:
 					sbValue.Append("IMUL ");
 					for (int i = 0; i < this.aParameters.Count; i++)
@@ -988,105 +1023,139 @@ namespace Disassembler.CPU
 						sbValue.Append(this.aParameters[i].ToString());
 					}
 					break;
+
 				case CPUInstructionEnum.IN:
 					sbValue.AppendFormat("IN {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.INC:
 					sbValue.AppendFormat("INC {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.INS:
 					sbValue.AppendFormat("INS{0}", GetSizeSuffix());
 					break;
+
 				case CPUInstructionEnum.INT:
 					sbValue.AppendFormat("INT {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.INTO:
 					sbValue.Append("INTO");
 					break;
+
 				case CPUInstructionEnum.IRET:
 					sbValue.Append("IRET");
 					break;
+
 				case CPUInstructionEnum.Jcc:
 					sbValue.AppendFormat("J{0} {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.JCXZ:
 					sbValue.AppendFormat("JCXZ {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.JMP:
 					sbValue.AppendFormat("JMP {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.JMPF:
 					sbValue.AppendFormat("JMP far {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.LAHF:
 					sbValue.Append("LAHF");
 					break;
+
 				case CPUInstructionEnum.LAR:
 					sbValue.AppendFormat("LAR {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.LDS:
 					sbValue.AppendFormat("LDS {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.LEA:
 					sbValue.AppendFormat("LEA {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.LEAVE:
 					sbValue.Append("LEAVE");
 					break;
+
 				case CPUInstructionEnum.LES:
 					sbValue.AppendFormat("LES {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.LFS:
 					sbValue.AppendFormat("LFS {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.LGDT:
 					sbValue.AppendFormat("LGDT {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.LGS:
 					sbValue.AppendFormat("LGS {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.LIDT:
 					sbValue.AppendFormat("LIDT {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.LLDT:
 					sbValue.AppendFormat("LLDT {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.LMSW:
 					sbValue.AppendFormat("LMSW {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.LODS:
 					sbValue.AppendFormat("LODS{0}", GetSizeSuffix());
 					break;
+
 				case CPUInstructionEnum.LOOP:
 					sbValue.AppendFormat("LOOP {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.LOOPE:
 					sbValue.AppendFormat("LOOPZ {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.LOOPNE:
 					sbValue.AppendFormat("LOOPNZ {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.LSL:
 					sbValue.AppendFormat("LSL {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.LSS:
 					sbValue.AppendFormat("LSS {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.LTR:
 					sbValue.AppendFormat("LTR {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.MOV:
 					sbValue.AppendFormat("MOV {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.MOVS:
 					sbValue.AppendFormat("MOVS{0}", GetSizeSuffix());
 					break;
+
 				case CPUInstructionEnum.MOVSX:
 					sbValue.AppendFormat("MOVSX {0}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.MOVZX:
 					sbValue.AppendFormat("MOVZX {0}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.MUL:
 					sbValue.Append("MUL ");
 					for (int i = 0; i < this.aParameters.Count; i++)
@@ -1096,48 +1165,63 @@ namespace Disassembler.CPU
 						sbValue.Append(this.aParameters[i].ToString());
 					}
 					break;
+
 				case CPUInstructionEnum.NEG:
 					sbValue.AppendFormat("NEG {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.NOP:
 					sbValue.Append("NOP");
 					break;
+
 				case CPUInstructionEnum.NOT:
 					sbValue.AppendFormat("NOT {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.OR:
 					sbValue.AppendFormat("OR {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.OUT:
 					sbValue.AppendFormat("OUT {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.OUTS:
 					sbValue.AppendFormat("OUTS{0}", GetSizeSuffix());
 					break;
+
 				case CPUInstructionEnum.POP:
 					sbValue.AppendFormat("POP {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.POPA:
 					sbValue.Append("POPA");
 					break;
+
 				case CPUInstructionEnum.POPF:
 					sbValue.Append("POPF");
 					break;
+
 				case CPUInstructionEnum.PUSH:
 					sbValue.AppendFormat("PUSH {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.PUSHA:
 					sbValue.Append("PUSHA");
 					break;
+
 				case CPUInstructionEnum.PUSHF:
 					sbValue.Append("PUSHF");
 					break;
+
 				case CPUInstructionEnum.RCL:
 					sbValue.AppendFormat("RCL {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.RCR:
 					sbValue.AppendFormat("RCR {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.RET:
 					sbValue.Append("RET");
 					if (this.aParameters.Count > 0)
@@ -1145,6 +1229,7 @@ namespace Disassembler.CPU
 						sbValue.AppendFormat(" {0}", this.aParameters[0].ToString());
 					}
 					break;
+
 				case CPUInstructionEnum.RETF:
 					sbValue.Append("RETF");
 					if (this.aParameters.Count > 0)
@@ -1152,104 +1237,133 @@ namespace Disassembler.CPU
 						sbValue.AppendFormat(" {0}", this.aParameters[0].ToString());
 					}
 					break;
+
 				case CPUInstructionEnum.ROL:
 					sbValue.AppendFormat("ROL {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.ROR:
 					sbValue.AppendFormat("ROR {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.SAHF:
 					sbValue.Append("SAHF");
 					break;
+
 				case CPUInstructionEnum.SAR:
 					sbValue.AppendFormat("SAR {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.SBB:
 					sbValue.AppendFormat("SBB {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.SCAS:
 					sbValue.AppendFormat("SCAS{0}", GetSizeSuffix());
 					break;
+
 				case CPUInstructionEnum.SETcc:
 					sbValue.AppendFormat("SET{0} {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.SGDT:
 					sbValue.AppendFormat("SGDT {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.SHL:
 					sbValue.AppendFormat("SHL {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.SHLD:
 					sbValue.AppendFormat("SHLD {0}, {1}, {2}", this.aParameters[1].ToString(), this.aParameters[0].ToString(),
 						this.aParameters[2].ToString());
 					break;
+
 				case CPUInstructionEnum.SHR:
 					sbValue.AppendFormat("SHR {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.SHRD:
 					sbValue.AppendFormat("SHRD {0}, {1}, {2}", this.aParameters[1].ToString(), this.aParameters[0].ToString(),
 						this.aParameters[2].ToString());
 					break;
+
 				case CPUInstructionEnum.SIDT:
 					sbValue.AppendFormat("SIDT {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.SLDT:
 					sbValue.AppendFormat("SLDT {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.SMSW:
 					sbValue.AppendFormat("SMSW {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.STC:
 					sbValue.Append("STC");
 					break;
+
 				case CPUInstructionEnum.STD:
 					sbValue.Append("STD");
 					break;
+
 				case CPUInstructionEnum.STI:
 					sbValue.Append("STI");
 					break;
+
 				case CPUInstructionEnum.STOS:
 					sbValue.AppendFormat("STOS{0}", GetSizeSuffix());
 					break;
+
 				case CPUInstructionEnum.STR:
 					sbValue.AppendFormat("STR {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.SUB:
 					sbValue.AppendFormat("SUB {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.TEST:
 					sbValue.AppendFormat("TEST {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.VERR:
 					sbValue.AppendFormat("VERR {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.VERW:
 					sbValue.AppendFormat("VERW {0}", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.WAIT:
 					sbValue.Append("WAIT");
 					break;
+
 				case CPUInstructionEnum.XCHG:
 					sbValue.AppendFormat("XCHG {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.XLAT:
 					sbValue.Append("XLATB");
 					break;
+
 				case CPUInstructionEnum.XOR:
 					sbValue.AppendFormat("XOR {0}, {1}", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
+
 				case CPUInstructionEnum.SWITCH:
 					sbValue.AppendFormat("switch({0})", this.aParameters[0].ToString());
 					break;
+
 				case CPUInstructionEnum.WordsToDword:
 					sbValue.AppendFormat("ToDword({0}, {1})", this.aParameters[0].ToString(), this.aParameters[1].ToString());
 					break;
-				case CPUInstructionEnum.CallFunction:
-					sbValue.AppendFormat("CALL {0:x4}:{1:x4}(...)", this.aParameters[0].Segment, this.aParameters[0].Value);
-					break;
+
 				case CPUInstructionEnum.CallOverlay:
 					sbValue.AppendFormat("CALLOverlay {0}:{1}(...)", this.aParameters[0].Value, this.aParameters[1].Value);
 					break;
+
 				default:
 					sbValue.Append("[Unknown instruction]");
 					break;

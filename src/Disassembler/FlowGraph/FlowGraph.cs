@@ -1,8 +1,10 @@
 ﻿using Disassembler.CPU;
 using IRB.Collections.Generic;
 using System.Collections;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Xml.Linq;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Disassembler
 {
@@ -14,7 +16,10 @@ namespace Disassembler
 		private FlowGraphNode? startNode = null;
 		private BDictionary<uint, FlowGraphNode> endNodes = new();
 		private BDictionary<uint, FlowGraphNode> nodes = new();
-		private bool fnBPFrame = false;
+		private bool hasBPFrame = false;
+		private bool usesSI = false;
+		private bool usesDI = false;
+		private bool usesDS = false;
 
 		private FlowGraphLocalEnum requiredLocals = FlowGraphLocalEnum.None;
 		// the compiler has these defined on the entry to the function
@@ -30,17 +35,15 @@ namespace Disassembler
 			this.parent = fn;
 			this.name = name;
 
-			ConstructGraph();
-			ConstructLocalRequirements();
-			DetermineFunctionBPFrame();
-
-			if (this.fnBPFrame)
+			if (!this.parent.IsLibraryFunction)
 			{
-				DetermineBasicLanguageConstructionBlocks();
+				ConstructGraph();
+				DetermineFunctionBPFrame();
+				ConstructLocalRequirements();
 			}
 		}
 
-		public void ConstructGraph()
+		private void ConstructGraph()
 		{
 			Queue<FlowGraphNode> unprocessedNodes = new();
 
@@ -283,7 +286,7 @@ namespace Disassembler
 						case CPUInstructionEnum.Jcc:
 							if (currentNode.LinearAddress == instruction.LinearAddress)
 							{
-								currentNode.NodeType = FlowGraphNodeTypeEnum.If;
+								currentNode.NodeType = FlowGraphNodeTypeEnum.Block;
 								currentNode.AsmInstructions.Add(instruction);
 
 								currentNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[1].Value), 
@@ -302,7 +305,7 @@ namespace Disassembler
 							}
 							else if (!this.nodes.ContainsKey(instruction.LinearAddress))
 							{
-								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.If, unprocessedNodes, false);
+								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, false);
 								newNode.AsmInstructions.Add(instruction);
 								currentNode.ChildNodes.Add(newNode);
 
@@ -331,7 +334,7 @@ namespace Disassembler
 						case CPUInstructionEnum.JCXZ:
 							if (currentNode.LinearAddress == instruction.LinearAddress)
 							{
-								currentNode.NodeType = FlowGraphNodeTypeEnum.If;
+								currentNode.NodeType = FlowGraphNodeTypeEnum.Block;
 								currentNode.AsmInstructions.Add(instruction);
 
 								currentNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value),
@@ -350,7 +353,7 @@ namespace Disassembler
 							}
 							else if (!this.nodes.ContainsKey(instruction.LinearAddress))
 							{
-								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.If, unprocessedNodes, false);
+								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, false);
 								newNode.AsmInstructions.Add(instruction);
 								currentNode.ChildNodes.Add(newNode);
 
@@ -379,7 +382,7 @@ namespace Disassembler
 						case CPUInstructionEnum.LOOP:
 							if (currentNode.LinearAddress == instruction.LinearAddress)
 							{
-								currentNode.NodeType = FlowGraphNodeTypeEnum.If;
+								currentNode.NodeType = FlowGraphNodeTypeEnum.Block;
 								currentNode.AsmInstructions.Add(instruction);
 
 								currentNode.ChildNodes.Add(CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value), 
@@ -398,7 +401,7 @@ namespace Disassembler
 							}
 							else if (!this.nodes.ContainsKey(instruction.LinearAddress))
 							{
-								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.If, unprocessedNodes, false);
+								newNode = CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, false);
 								newNode.AsmInstructions.Add(instruction);
 								currentNode.ChildNodes.Add(newNode);
 
@@ -431,13 +434,14 @@ namespace Disassembler
 								newNode = CreateOrFindNode(MainProgram.ToLinearAddress(instruction.Segment, instruction.Parameters[0].Value), 
 									FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
 								currentNode.ChildNodes.Add(newNode);
+
+								blockEnd = true;
 							}
 							else
 							{
 								currentNode.AsmInstructions.Add(instruction);
 							}
 
-							blockEnd = true;
 							break;
 
 						case CPUInstructionEnum.JMPF:
@@ -446,13 +450,13 @@ namespace Disassembler
 							{
 								newNode = CreateOrFindNode(MainProgram.ToLinearAddress(parameter.Segment, parameter.Value), FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
 								currentNode.ChildNodes.Add(newNode);
+
+								blockEnd = true;
 							}
 							else
 							{
 								currentNode.AsmInstructions.Add(instruction);
 							}
-
-							blockEnd = true;
 							break;
 
 						case CPUInstructionEnum.SWITCH:
@@ -491,6 +495,7 @@ namespace Disassembler
 
 						case CPUInstructionEnum.CALL:
 							currentNode.AsmInstructions.Add(instruction);
+
 							if (instructionPos + 1 < instructionCount)
 							{
 								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
@@ -502,6 +507,7 @@ namespace Disassembler
 
 						case CPUInstructionEnum.CALLF:
 							currentNode.AsmInstructions.Add(instruction);
+
 							if (instructionPos + 1 < instructionCount)
 							{
 								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
@@ -513,6 +519,7 @@ namespace Disassembler
 
 						case CPUInstructionEnum.CallOverlay:
 							currentNode.AsmInstructions.Add(instruction);
+
 							if (instructionPos + 1 < instructionCount)
 							{
 								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
@@ -524,6 +531,7 @@ namespace Disassembler
 
 						case CPUInstructionEnum.INT:
 							currentNode.AsmInstructions.Add(instruction);
+
 							if (instructionPos + 1 < instructionCount)
 							{
 								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
@@ -561,7 +569,7 @@ namespace Disassembler
 				{
 					instructionPos = instructionCount;
 
-					while (blockEnd && unprocessedNodes.Count > 0)
+					while (unprocessedNodes.Count > 0)
 					{
 						FlowGraphNode node = unprocessedNodes.Dequeue();
 
@@ -611,6 +619,18 @@ namespace Disassembler
 			{
 				sortedNodes[i].Ordinal = ordinal++;
 			}
+
+			// check that all nodes have children, except end node
+			for (int i = 0; i < this.nodes.Count; i++)
+			{
+				FlowGraphNode node = this.nodes[i].Value;
+
+				if (node.NodeType != FlowGraphNodeTypeEnum.End && node.ChildNodes.Count == 0)
+				{
+					throw new Exception($"All nodes should have their children, except end node. " +
+						$"The childless node address: 0x{node.LinearAddress:x} in function {this.parent.Segment.ToString()}.{this.parent.Name}");
+				}
+			}
 		}
 
 		private void ConstructLocalRequirements()
@@ -632,60 +652,549 @@ namespace Disassembler
 
 				if (startNode.ReferenceNodes.Count == 0 && startNode.ChildNodes.Count == 1)
 				{
-					startNode = startNode.ChildNodes[0];
-				}
+					FlowGraphNode startNode1 = startNode.ChildNodes[0];
 
-				if (endNode.ReferenceNodes.Count == 1)
-				{
-					endNode = endNode.ReferenceNodes[0].Value;
-				}
+					if (endNode.ReferenceNodes.Count == 1)
+					{
+						FlowGraphNode endNode1 = endNode.ReferenceNodes[0].Value;
 
-				int endNodeInstructionCount = endNode.AsmInstructions.Count;
+						int endNode1InstructionCount = endNode1.AsmInstructions.Count;
 
-				if (startNode.AsmInstructions.Count > 4 && endNode.AsmInstructions.Count > 1 &&
-					(instruction = startNode.AsmInstructions[0]).InstructionType == CPUInstructionEnum.PUSH &&
-					instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
-					instruction.Parameters.Count == 1 &&
-					instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
-					instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
+						if (startNode1.AsmInstructions.Count > 4 && endNode1.AsmInstructions.Count > 1 &&
+							(instruction = startNode1.AsmInstructions[0]).InstructionType == CPUInstructionEnum.PUSH &&
+							instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+							instruction.Parameters.Count == 1 &&
+							instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+							instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
 
-					(instruction = startNode.AsmInstructions[1]).InstructionType == CPUInstructionEnum.MOV &&
-					instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
-					instruction.Parameters.Count == 2 &&
-					instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
-					instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
-					instruction.Parameters[1].Type == CPUParameterTypeEnum.Register &&
-					instruction.Parameters[1].Value == (uint)CPURegisterEnum.SP &&
+							(instruction = startNode1.AsmInstructions[1]).InstructionType == CPUInstructionEnum.MOV &&
+							instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+							instruction.Parameters.Count == 2 &&
+							instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+							instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
+							instruction.Parameters[1].Type == CPUParameterTypeEnum.Register &&
+							instruction.Parameters[1].Value == (uint)CPURegisterEnum.SP &&
 
-					(instruction = endNode.AsmInstructions[endNodeInstructionCount - 1]).InstructionType == CPUInstructionEnum.POP &&
-					instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
-					instruction.Parameters.Count == 1 &&
-					instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
-					instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP)
-				{
-					// function sathisfies basic C language frame
-					this.fnBPFrame = true;
+							(instruction = endNode1.AsmInstructions[endNode1InstructionCount - 1]).InstructionType == CPUInstructionEnum.POP &&
+							instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+							instruction.Parameters.Count == 1 &&
+							instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+							instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP)
+						{
+							// function satisfies basic C language frame
+							this.hasBPFrame = true;
+
+							#region Adjust start block and end block instruction positions
+							// move frame instructions to start and end block
+							startNode.AsmInstructions.Add(startNode1.AsmInstructions[0]);
+							startNode1.AsmInstructions.RemoveAt(0);
+							startNode.AsmInstructions.Add(startNode1.AsmInstructions[0]);
+							startNode1.AsmInstructions.RemoveAt(0);
+
+							while (startNode1.AsmInstructions.Count > 0)
+							{
+								instruction = startNode1.AsmInstructions[0];
+
+								if (instruction.InstructionType == CPUInstructionEnum.SUB &&
+									instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+									instruction.Parameters.Count == 2 &&
+									instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+									instruction.Parameters[0].Value == (uint)CPURegisterEnum.SP &&
+									instruction.Parameters[1].Type == CPUParameterTypeEnum.Immediate)
+								{
+									startNode.AsmInstructions.Add(instruction);
+									startNode1.AsmInstructions.RemoveAt(0);
+
+									this.parent.LocalVariableSize = (int)instruction.Parameters[1].Value;
+									this.parent.LocalVariablePosition += this.parent.LocalVariableSize;
+								}
+								else if (instruction.InstructionType == CPUInstructionEnum.PUSH)
+								{
+									CPUParameter parameter = instruction.Parameters[0];
+
+									if (parameter.Type == CPUParameterTypeEnum.Register && parameter.Size == CPUParameterSizeEnum.UInt16)
+									{
+										bool endBlock = true;
+
+										switch ((CPURegisterEnum)parameter.Value)
+										{
+											case CPURegisterEnum.SI:
+												if (this.usesSI)
+												{
+													throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the SI register is pushed more than once onto the stack");
+												}
+												this.usesSI = true;
+												endBlock = false;
+
+												startNode.AsmInstructions.Add(instruction);
+												startNode1.AsmInstructions.RemoveAt(0);
+												break;
+
+											case CPURegisterEnum.DI:
+												if (this.usesDI)
+												{
+													throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the DI register is pushed more than once onto the stack");
+												}
+												this.usesDI = true;
+												endBlock = false;
+
+												startNode.AsmInstructions.Add(instruction);
+												startNode1.AsmInstructions.RemoveAt(0);
+												break;
+										}
+
+										if (endBlock)
+										{
+											break;
+										}
+									}
+									else if (parameter.Type == CPUParameterTypeEnum.SegmentRegister && parameter.Size == CPUParameterSizeEnum.UInt16 &&
+										(CPUSegmentRegisterEnum)parameter.Value == CPUSegmentRegisterEnum.DS)
+									{
+										if (this.usesDS)
+										{
+											throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the DS segment register is pushed more than once onto the stack");
+										}
+
+										this.usesDS = true;
+
+										startNode.AsmInstructions.Add(instruction);
+										startNode1.AsmInstructions.RemoveAt(0);
+									}
+									else
+									{
+										break;
+									}
+								}
+								else
+								{
+									break;
+								}
+							}
+
+							endNode1InstructionCount = endNode1.AsmInstructions.Count;
+
+							endNode.AsmInstructions.Insert(0, endNode1.AsmInstructions[endNode1InstructionCount - 1]);
+							endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
+							endNode1InstructionCount--;
+
+							while (endNode1InstructionCount > 0)
+							{
+								instruction = endNode1.AsmInstructions[endNode1InstructionCount - 1];
+
+								if (instruction.InstructionType == CPUInstructionEnum.MOV &&
+									instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+									instruction.Parameters.Count == 2 &&
+									instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+									instruction.Parameters[0].Value == (uint)CPURegisterEnum.SP &&
+									instruction.Parameters[1].Type == CPUParameterTypeEnum.Register &&
+									instruction.Parameters[1].Value == (uint)CPURegisterEnum.BP)
+								{
+									endNode.AsmInstructions.Insert(0, instruction);
+									endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
+								}
+								else if (instruction.InstructionType == CPUInstructionEnum.POP)
+								{
+									CPUParameter parameter = instruction.Parameters[0];
+
+									if (parameter.Type == CPUParameterTypeEnum.Register && parameter.Size == CPUParameterSizeEnum.UInt16)
+									{
+										bool endBlock = true;
+
+										switch ((CPURegisterEnum)parameter.Value)
+										{
+											case CPURegisterEnum.SI:
+												if (!this.usesSI)
+												{
+													throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the SI register is not used, but is poped off the stack");
+												}
+												this.usesSI = true;
+												endBlock = false;
+
+												endNode.AsmInstructions.Insert(0, instruction);
+												endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
+												break;
+
+											case CPURegisterEnum.DI:
+												if (!this.usesDI)
+												{
+													throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the DI register is not used, but is poped off the stack");
+												}
+												this.usesDI = true;
+												endBlock = false;
+
+												endNode.AsmInstructions.Insert(0, instruction);
+												endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
+												break;
+										}
+
+										if (endBlock)
+										{
+											break;
+										}
+									}
+									else if (parameter.Type == CPUParameterTypeEnum.SegmentRegister && parameter.Size == CPUParameterSizeEnum.UInt16 &&
+										(CPUSegmentRegisterEnum)parameter.Value == CPUSegmentRegisterEnum.DS)
+									{
+										if (!this.usesDS)
+										{
+											throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the DS segment register is not used, but is poped off the stack");
+										}
+
+										this.usesDS = true;
+
+										endNode.AsmInstructions.Insert(0, instruction);
+										endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
+									}
+									else
+									{
+										break;
+									}
+								}
+								else
+								{
+									break;
+								}
+
+								endNode1InstructionCount--;
+							}
+							#endregion
+						}
+					}
 				}
 			}
 		}
 
-		private void DetermineBasicLanguageConstructionBlocks()
+		public void TranslateFunction()
 		{
-			if (this.startNode != null)
+			// refuse to process assembly and library functions
+			if (!this.parent.IsLibraryFunction && this.hasBPFrame && this.startNode != null && this.endNodes.Count > 0)
 			{
-				FlowGraphNode blockStartNode = this.startNode;
-				FlowGraphNode blockEndNode;
+				UndoCompilerOptimizations();
+				TranslateToIL();
+				DetermineBasicLanguageConstructionBlocks();
+			}
+		}
 
-				while (blockStartNode.NodeType != FlowGraphNodeTypeEnum.End)
+		private void UndoCompilerOptimizations()
+		{
+			#region Check and move ADD SP, ? instruction after each CALL instruction
+			for (int i = 0; i < this.nodes.Count; i++)
+			{
+				FlowGraphNode node = this.nodes[i].Value;
+
+				if (node.NodeType != FlowGraphNodeTypeEnum.Start && node.NodeType != FlowGraphNodeTypeEnum.End)
 				{
-					if (blockStartNode.ReferenceNodes.Count > 0)
+					for (int j = 0; j < node.AsmInstructions.Count; j++)
+					{
+						CPUInstruction instruction = node.AsmInstructions[j];
+						CPUInstruction? spInstruction;
+						CPUParameter parameter;
+						ProgramFunction? function;
+
+						switch (instruction.InstructionType)
+						{
+							case CPUInstructionEnum.CALL:
+								parameter = instruction.Parameters[0];
+								function = this.parent.Segment.Parent.FindFunction(0, instruction.Segment, (ushort)parameter.Value);
+
+								if (function != null)
+								{
+									if (function.ParameterSize > 0)
+									{
+										spInstruction = FindAndAdjustAddSPCallInstruction(function, node, j);
+
+										if (spInstruction == null)
+										{
+											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction at offset 0x{instruction.Offset:x} in " +
+												$"function {this.parent.Segment.ToString()}.{this.parent.Name}");
+										}
+										else if (spInstruction.Parameters[1].Value != function.ParameterSize)
+										{
+											Console.WriteLine($"Warning, parameter size doesn't match function call to {function.Segment.ToString()}.{function.Name} ({function.ParameterSize}), " +
+												$"in function {this.parent.Segment.ToString()}.{this.parent.Name} at offset 0x{instruction.Offset:x} ({spInstruction.Parameters[1].Value})");
+										}
+									}
+								}
+								break;
+
+							case CPUInstructionEnum.CALLF:
+								parameter = instruction.Parameters[0];
+								function = this.parent.Segment.Parent.FindFunction(0, instruction.Segment, (ushort)parameter.Value);
+
+								if (function != null)
+								{
+									if (function.ParameterSize > 0)
+									{
+										spInstruction = FindAndAdjustAddSPCallInstruction(function, node, j);
+
+										if (spInstruction == null)
+										{
+											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction at 0x{instruction.Offset:x} in " +
+												$"function {this.parent.Segment.ToString()}.{this.parent.Name}");
+										}
+										else if (spInstruction.Parameters[1].Value != function.ParameterSize)
+										{
+											Console.WriteLine($"Warning, parameter size doesn't match function call to {function.Segment.ToString()}.{function.Name} ({function.ParameterSize}), " +
+												$"in function {this.parent.Segment.ToString()}.{this.parent.Name} at offset 0x{instruction.Offset:x} ({spInstruction.Parameters[1].Value})");
+										}
+									}
+								}
+								break;
+
+							case CPUInstructionEnum.CallOverlay:
+								function = this.parent.Segment.Parent.FindFunction((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value);
+
+								if (function != null)
+								{
+									if (function.ParameterSize > 0)
+									{
+										spInstruction = FindAndAdjustAddSPCallInstruction(function, node, j);
+
+										if (spInstruction == null)
+										{
+											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction at 0x{instruction.Offset:x} in " +
+												$"function {this.parent.Segment.ToString()}.{this.parent.Name}");
+										}
+										else if (spInstruction.Parameters[1].Value != function.ParameterSize)
+										{
+											Console.WriteLine($"Warning, parameter size doesn't match function call to {function.Segment.ToString()}.{function.Name} ({function.ParameterSize}), " +
+												$"in function {this.parent.Segment.ToString()}.{this.parent.Name} at offset 0x{instruction.Offset:x} ({spInstruction.Parameters[1].Value})");
+										}
+									}
+								}
+								break;
+						}
+					}
+				}
+			}
+			#endregion
+
+			#region Merge call parameter blocks if they are in different blocks
+			for (int i = 0; i < this.nodes.Count; i++)
+			{
+				FlowGraphNode node = this.nodes[i].Value;
+
+				if (node.NodeType != FlowGraphNodeTypeEnum.Start && node.NodeType != FlowGraphNodeTypeEnum.End)
+				{
+					for (int j = 0; j < node.AsmInstructions.Count; j++)
+					{
+						CPUInstruction instruction = node.AsmInstructions[j];
+						CPUInstruction instruction1;
+						CPUParameter parameter;
+						ProgramFunction? function;
+
+						int parameterSize = 0;
+
+						switch (instruction.InstructionType)
+						{
+							case CPUInstructionEnum.CALL:
+								// get parameter size if possible
+								// only direct ADD SP, ? instruction is important because some functions can have different number of parameters
+								if (j + 1 < node.AsmInstructions.Count)
+								{
+									instruction1 = node.AsmInstructions[j + 1];
+
+									if (instruction.InstructionType == CPUInstructionEnum.ADD &&
+										instruction.Parameters.Count == 2 &&
+										instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+										instruction.Parameters[0].RegisterValue == CPURegisterEnum.SP)
+									{
+										parameterSize = (int)instruction.Parameters[1].Value;
+									}
+								}
+
+								if (parameterSize > 0)
+								{
+									// backtrack parameters and merge block if necessary
+									CheckAndMergeCallParameterBlock(node, j, parameterSize);
+								}
+								break;
+
+							case CPUInstructionEnum.CALLF:
+								break;
+
+							case CPUInstructionEnum.CallOverlay:
+								break;
+						}
+					}
+				}
+			}
+			#endregion
+		}
+
+		private CPUInstruction? FindAndAdjustAddSPCallInstruction(ProgramFunction targetFunction, FlowGraphNode node, int instructionIndex)
+		{
+			CPUInstruction? spInstruction = null;
+
+			if (instructionIndex + 1 < node.AsmInstructions.Count)
+			{
+				CPUInstruction instruction = node.AsmInstructions[instructionIndex + 1];
+
+				if (instruction.InstructionType == CPUInstructionEnum.ADD &&
+					instruction.Parameters.Count == 2 &&
+					instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+					instruction.Parameters[0].RegisterValue == CPURegisterEnum.SP)
+				{
+					spInstruction = instruction;
+				}
+				else if (targetFunction.ParameterSize == 2 &&
+					instruction.InstructionType == CPUInstructionEnum.POP &&
+					instruction.Parameters.Count == 1 &&
+					instruction.Parameters[0].Type == CPUParameterTypeEnum.Register)
+				{
+					spInstruction = new CPUInstruction(instruction.Segment, instruction.Offset, CPUInstructionEnum.ADD, instruction.DefaultSize);
+					spInstruction.Parameters.Add(new CPUParameter(CPUParameterTypeEnum.Register, (uint)CPURegisterEnum.SP));
+					spInstruction.Parameters.Add(new CPUParameter(CPUParameterTypeEnum.Immediate, CPUParameterSizeEnum.UInt16, 2));
+
+					node.AsmInstructions[instructionIndex + 1] = spInstruction;
+				}
+			}
+
+			if (spInstruction == null && node.ChildNodes.Count == 1 && targetFunction.ParameterSize > 0)
+			{
+				FlowGraphNode currentNode = node.ChildNodes[0];
+				Queue<FlowGraphNode> parentNodes = new();
+
+				parentNodes.Enqueue(currentNode);
+
+				// search n levels for required instruction
+				for (int i = 0; i < 2; i++)
+				{
+					if (currentNode.NodeType == FlowGraphNodeTypeEnum.End)
+					{
+						// we are forgiving missing ADD SP, ? instruction at the end of function
+						CPUInstruction instruction = node.AsmInstructions[node.AsmInstructions.Count - 1];
+
+						spInstruction = new CPUInstruction(instruction.Segment, (ushort)(instruction.Offset + 1), CPUInstructionEnum.ADD, instruction.DefaultSize);
+						spInstruction.Parameters.Add(new CPUParameter(CPUParameterTypeEnum.Register, (uint)CPURegisterEnum.SP));
+						spInstruction.Parameters.Add(new CPUParameter(CPUParameterTypeEnum.Immediate, CPUParameterSizeEnum.UInt16, (uint)targetFunction.ParameterSize));
+
+						node.AsmInstructions.Add(spInstruction);
+					}
+					else
+					{
+						for (int j = 0; j < currentNode.AsmInstructions.Count; j++)
+						{
+							CPUInstruction instruction = currentNode.AsmInstructions[j];
+
+							if (instruction.InstructionType == CPUInstructionEnum.ADD &&
+								instruction.Parameters.Count == 2 &&
+								instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+								instruction.Parameters[0].RegisterValue == CPURegisterEnum.SP)
+							{
+								spInstruction = instruction;
+
+								currentNode.AsmInstructions.RemoveAt(j);
+
+								while (parentNodes.Count > 0)
+								{
+									FlowGraphNode parentNode = parentNodes.Dequeue();
+
+									for (int k = 0; k < parentNode.ReferenceNodes.Count; k++)
+									{
+										FlowGraphNode referenceNode = parentNode.ReferenceNodes[k].Value;
+
+										referenceNode.AsmInstructions.Add(spInstruction);
+									}
+								}
+								break;
+							}
+							else if (targetFunction.ParameterSize == 2 &&
+								instruction.InstructionType == CPUInstructionEnum.POP &&
+								instruction.Parameters.Count == 1 &&
+								instruction.Parameters[0].Type == CPUParameterTypeEnum.Register)
+							{
+								spInstruction = new CPUInstruction(instruction.Segment, instruction.Offset, CPUInstructionEnum.ADD, instruction.DefaultSize);
+								spInstruction.Parameters.Add(new CPUParameter(CPUParameterTypeEnum.Register, (uint)CPURegisterEnum.SP));
+								spInstruction.Parameters.Add(new CPUParameter(CPUParameterTypeEnum.Immediate, CPUParameterSizeEnum.UInt16, 2));
+
+								currentNode.AsmInstructions.RemoveAt(j);
+
+								while (parentNodes.Count > 0)
+								{
+									FlowGraphNode parentNode = parentNodes.Dequeue();
+
+									for (int k = 0; k < parentNode.ReferenceNodes.Count; k++)
+									{
+										FlowGraphNode referenceNode = parentNode.ReferenceNodes[k].Value;
+
+										referenceNode.AsmInstructions.Add(spInstruction);
+									}
+								}
+								break;
+							}
+						}
+					}
+
+					if (spInstruction != null || currentNode.ChildNodes.Count != 1)
 					{
 						break;
 					}
-
-					blockStartNode = blockStartNode.ChildNodes[0];
+					else
+					{
+						currentNode = currentNode.ChildNodes[0];
+						parentNodes.Enqueue(currentNode);
+					}
 				}
 			}
+
+			return spInstruction;
+		}
+
+		private void CheckAndMergeCallParameterBlock(FlowGraphNode node, int instructionIndex, int parameterSize)
+		{
+			int sizeCount = 0;
+
+
+		}
+
+		private void TranslateToIL()
+		{
+			BDictionary<CPURegisterEnum, ILExpression> localRegisters = new();
+			BDictionary<CPUSegmentRegisterEnum, uint> localSegments = new();
+			// track the stack state
+			// sometimes the function call doesn't adjust SP (for the length of the parameters) at the end of the function
+			Stack<ILExpression> localStack = new Stack<ILExpression>();
+
+			this.parent.Variables.Clear();
+
+			//Console.WriteLine($"Translating '{this.parent.Parent.ToString()}.{this.parent.Name}'");
+
+			localSegments.Add(CPUSegmentRegisterEnum.DS, this.parent.Segment.Parent.DefaultDS);
+			localSegments.Add(CPUSegmentRegisterEnum.ES, this.parent.Segment.Parent.DefaultDS);
+
+			this.startNode!.TranslateToIL(localRegisters, localSegments, localStack);
+		}
+
+		private void DetermineBasicLanguageConstructionBlocks()
+		{
+			FlowGraphNode currentNode = this.startNode!;
+			FlowGraphNode blockStartNode = this.endNodes[0].Value;
+			FlowGraphNode blockEndNode = this.endNodes[0].Value;
+			List<FlowGraphNode> nodes = new();
+			Queue<FlowGraphNode> branches = new();
+
+			// find the first node that is referenced
+			while (currentNode.NodeType != FlowGraphNodeTypeEnum.End)
+			{
+				if (currentNode.ReferenceNodes.Count > 0)
+				{
+					blockStartNode = currentNode;
+					break;
+				}
+				else
+				{
+					for (int i = 0; i < currentNode.ChildNodes.Count; i++)
+					{
+						branches.Enqueue(currentNode.ChildNodes[i]);
+					}
+
+					currentNode = branches.Dequeue();
+				}
+			}
+
+			// find the smallest subset of nodes between referenced node and child nodes
 		}
 
 		private FlowGraphNode CreateOrFindNode(uint address, FlowGraphNodeTypeEnum blockType, Queue<FlowGraphNode> unprocessedNodes, bool queue)
@@ -1206,12 +1715,10 @@ namespace Disassembler
 					break;
 
 				case CPUInstructionEnum.CALL:
-					break;
-
 				case CPUInstructionEnum.CALLF:
-					break;
-
 				case CPUInstructionEnum.CallOverlay:
+					defined |= FlowGraphLocalEnum.AX;
+					defined |= FlowGraphLocalEnum.DX;
 					break;
 
 				case CPUInstructionEnum.INT:
@@ -1621,11 +2128,11 @@ namespace Disassembler
 
 			if (this.startNode != null)
 			{
-				writer.WriteLine($"Start [shape=invhouse label=\"Start\\nRequires: {this.startNode.RequiredLocals.ToString()}\\nDefines: {this.startNode.DefinedLocals.ToString()}\"];");
+				writer.WriteLine($"Start [shape=\"invhouse\", label=\"Start\\nRequires: {this.startNode.RequiredLocals.ToString()}\\nDefines: {this.startNode.DefinedLocals.ToString()}\"];");
 			}
 			else
 			{
-				writer.WriteLine($"Start [shape=invhouse];");
+				writer.WriteLine($"Start [shape=\"invhouse\"];");
 			}
 
 			for (int i = 0; i < nodeAdresses.Length; i++)
@@ -1636,58 +2143,61 @@ namespace Disassembler
 					case FlowGraphNodeTypeEnum.Start:
 					case FlowGraphNodeTypeEnum.End:
 						break;
+
 					case FlowGraphNodeTypeEnum.Block:
-							writer.WriteLine($"n{node.LinearAddress:x} [shape=box label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
-							break;
+						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"box\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
+						break;
 
-						case FlowGraphNodeTypeEnum.If:
-							writer.WriteLine($"n{node.LinearAddress:x} [shape=diamond label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
-							break;
+					case FlowGraphNodeTypeEnum.If:
+						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"diamond\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
+						break;
 
-						case FlowGraphNodeTypeEnum.Switch:
-							writer.WriteLine($"n{node.LinearAddress:x} [shape=hexagon label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
-							break;
+					case FlowGraphNodeTypeEnum.Switch:
+						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"hexagon\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
+						break;
 
-						case FlowGraphNodeTypeEnum.DoWhile:
-						case FlowGraphNodeTypeEnum.While:
-						case FlowGraphNodeTypeEnum.For:
-							writer.WriteLine($"n{node.LinearAddress:x} [shape=parallelogram label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
-							break;
-					}
-
-					for (int j = 0; j < node.ChildNodes.Count; j++)
-					{
-						FlowGraphNode childNode = node.ChildNodes[j];
-
-						if (childNode.NodeType == FlowGraphNodeTypeEnum.End)
-						{
-							writer.Write($"n{node.LinearAddress:x}->End");
-						}
-						else if (node.NodeType == FlowGraphNodeTypeEnum.Start)
-						{
-							writer.Write($"Start->n{childNode.LinearAddress:x}");
-						}
-						else
-						{
-							writer.Write($"n{node.LinearAddress:x}->n{childNode.LinearAddress:x}");
-
-							if (node.NodeType == FlowGraphNodeTypeEnum.Switch)
-							{
-								writer.Write($" [label=\"{node.SwitchValues[j]}\"]");
-							}
-						}
-
-						writer.WriteLine(";");
-					}
+					case FlowGraphNodeTypeEnum.DoWhile:
+					case FlowGraphNodeTypeEnum.While:
+					case FlowGraphNodeTypeEnum.For:
+						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"parallelogram\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
+						break;
 				}
 
-			writer.WriteLine($"End [shape=house];");
+				for (int j = 0; j < node.ChildNodes.Count; j++)
+				{
+					FlowGraphNode childNode = node.ChildNodes[j];
+
+					if (childNode.NodeType == FlowGraphNodeTypeEnum.End)
+					{
+						writer.Write($"n{node.LinearAddress:x}->End");
+					}
+					else if (node.NodeType == FlowGraphNodeTypeEnum.Start)
+					{
+						writer.Write($"Start->n{childNode.LinearAddress:x}");
+					}
+					else
+					{
+						writer.Write($"n{node.LinearAddress:x}->n{childNode.LinearAddress:x}");
+
+						if (node.NodeType == FlowGraphNodeTypeEnum.Switch)
+						{
+							writer.Write($" [label=\"{node.SwitchValues[j]}\"]");
+						}
+					}
+
+					writer.WriteLine(";");
+				}
+			}
+
+			writer.WriteLine($"End [shape=\"house\"];");
 
 			writer.WriteLine("}");
 
 			writer.Flush();
 			writer.Close();
 		}
+
+		public ProgramFunction Parent { get => this.parent; }
 
 		public string Name { get => this.name; set => this.name = value; }
 
@@ -1701,6 +2211,6 @@ namespace Disassembler
 
 		public FlowGraphLocalEnum DefinedLocals { get => this.definedLocals; set => this.definedLocals = value; }
 
-		public bool BPFrame { get => this.fnBPFrame; }
+		public bool BPFrame { get => this.hasBPFrame; }
 	}
 }

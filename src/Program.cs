@@ -97,7 +97,7 @@ internal class Program
 			}
 		}
 
-		Console.WriteLine("Used segment names:");
+		/*Console.WriteLine("Used segment names:");
 		for (int i = 0; i < segmentNames.Count; i++)
 		{
 			Console.WriteLine(segmentNames[i]);
@@ -107,7 +107,7 @@ internal class Program
 		for (int i = 0; i < groupNames.Count; i++)
 		{
 			Console.WriteLine(groupNames[i]);
-		}
+		}*/
 
 		List<ModuleMatch> libraryMatches = new List<ModuleMatch>();
 		Console.WriteLine("Matching MLIBC7");
@@ -302,7 +302,24 @@ internal class Program
 
 			for (int j = 0; j < functionOffsets.Length; j++)
 			{
-				segment.Functions.GetValueByKey(functionOffsets[j]).Ordinal = j + 1;
+				function = segment.Functions.GetValueByKey(functionOffsets[j]);
+
+				function.Ordinal = j + 1;
+			}
+		}
+
+		for (int i = 0; i < mainProgram.Segments.Count; i++)
+		{
+			ProgramSegment segment = mainProgram.Segments[i].Value;
+
+			for (int j = 0; j < segment.Functions.Count; j++)
+			{
+				function = segment.Functions[j].Value;
+
+				if (function.FlowGraph != null)
+				{
+					function.FlowGraph.TranslateFunction();
+				}
 			}
 		}
 
@@ -338,10 +355,10 @@ internal class Program
 			{
 				function = segment.Functions.GetValueByKey(0x1080);
 
-				if (function.Graph != null)
+				if (function.FlowGraph != null)
 				{
 					//function.Graph.ConstructGraph();
-					function.Graph.WriteGraphDOT("test.gv");
+					function.FlowGraph.WriteGraphDOT("test.gv");
 				}
 			}
 		}

@@ -195,7 +195,6 @@
 		// syntetic instructions - not real instructions, just synonyms
 		SWITCH,
 		WordsToDword,
-		CallFunction,
 		CallOverlay
 	}
 }
