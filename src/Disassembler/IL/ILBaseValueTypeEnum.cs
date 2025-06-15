@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace Disassembler
 {
-    public enum ILValueTypeEnum
+    public enum ILBaseValueTypeEnum
     {
-		Undefined,
+		Void,
 		UInt8,
 		Int8,
 		UInt16,
@@ -17,6 +17,9 @@ namespace Disassembler
 		Int32,
 		Ptr16,
 		Ptr32,
-		FnPtr32
+		FnPtr32,
+		Struct,
+		Union,
+		DirectObject
 	}
 }

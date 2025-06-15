@@ -1,55 +1,101 @@
 ﻿using Disassembler.CPU;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Disassembler
 {
 	public class ILVariable : ILExpression
 	{
+		private string? name = null;
 		private ILVariableScopeEnum scope = ILVariableScopeEnum.LocalVariable;
-		private ILValueTypeEnum type = ILValueTypeEnum.Undefined;
-		private int offset = 0;
+		private ILValueType valueType = ILValueType.Void;
 		private int arraySize = 0;
+		private int valueTypeConfidence = 0;
+		private int offset = 0;
 		private ProgramFunction? parent;
+		private object? initialValue = null;
 
-		public ILVariable(ProgramFunction? parent, CPUParameterSizeEnum type, int offset) : this(parent, ILVariableScopeEnum.LocalVariable, FromCPUParameterSizeEnum(type), offset)
-		{ }
+		public ILVariable(ProgramFunction? parent, ILValueType type, int offset) : this(parent, ILVariableScopeEnum.LocalVariable, type, offset, 0) { }
 
-		public ILVariable(ProgramFunction? parent, ILValueTypeEnum type, int offset) : this(parent, ILVariableScopeEnum.LocalVariable, type, offset)
-		{ }
+		public ILVariable(ILVariableScopeEnum scope, ILValueType type, int offset, int valueTypeConfidence) : this(null, null, scope, type, offset, valueTypeConfidence) { }
 
-		public ILVariable(ProgramFunction? parent, ILVariableScopeEnum scope, CPUParameterSizeEnum type, int offset) : this(parent, scope, FromCPUParameterSizeEnum(type), offset)
-		{ }
+		public ILVariable(ProgramFunction? parent, ILVariableScopeEnum scope, ILValueType type, int offset) : this(parent, null, scope, type, offset, 0) { }
 
-		public ILVariable(ProgramFunction? parent, ILVariableScopeEnum scope, ILValueTypeEnum type, int offset)
+		public ILVariable(string name, ILVariableScopeEnum scope, ILValueType type, int offset, int valueTypeConfidence) : this(null, name, scope, type, offset, valueTypeConfidence) { }
+
+		public ILVariable(ProgramFunction? parent, ILVariableScopeEnum scope, ILValueType type, int offset, int valueTypeConfidence) : this(parent, null, scope, type, offset, valueTypeConfidence) { }
+
+		public ILVariable(ProgramFunction? parent, string? name, ILVariableScopeEnum scope, ILValueType valueType, int offset, int valueTypeConfidence)
 		{
 			this.parent = parent;
+			this.name = name;
 			this.scope = scope;
-			this.type = type;
+			this.valueType = valueType;
 			this.offset = offset;
+			this.valueTypeConfidence = valueTypeConfidence;
 		}
 
-		public string Name
+		public string CSDeclaration
 		{
 			get
 			{
 				switch (this.scope)
 				{
-					case ILVariableScopeEnum.LocalVariable:
-						return $"Local_{this.Offset:x}";
+					case ILVariableScopeEnum.Global:
+						return $"public {this.valueType.CSDeclaration} {this.Name} {this.CSInitialization}";
 
 					case ILVariableScopeEnum.LocalParameter:
-						return $"Param_{this.Offset:x}";
+						return $"{this.valueType.CSDeclaration} {this.Name}";
 
-					case ILVariableScopeEnum.Global:
-						return $"Global_{this.Offset:x}";
+					case ILVariableScopeEnum.LocalVariable:
+						return $"{this.valueType.CSDeclaration} {this.Name}{this.CSInitialization}";
 
 					default:
-						throw new Exception($"Undefined variable scope {this.scope}");
+						return $"object {this.Name}";
 				}
+			}
+		}
+
+		public string CSInitialization
+		{
+			get
+			{
+				if (this.arraySize > 0)
+				{
+					switch (this.valueType.BaseType)
+					{
+						case ILBaseValueTypeEnum.UInt8:
+							return $" = new byte{((this.arraySize > 0) ? $"[{this.arraySize}]" : "")}";
+
+						case ILBaseValueTypeEnum.Int8:
+							return $" = new sbyte{((this.arraySize > 0) ? $"[{this.arraySize}]" : "")}";
+
+						case ILBaseValueTypeEnum.UInt16:
+							return $" = new ushort{((this.arraySize > 0) ? $"[{this.arraySize}]" : "")}";
+
+						case ILBaseValueTypeEnum.Int16:
+							return $" = new short{((this.arraySize > 0) ? $"[{this.arraySize}]" : "")}";
+
+						case ILBaseValueTypeEnum.UInt32:
+							return $" = new uint{((this.arraySize > 0) ? $"[{this.arraySize}]" : "")}";
+
+						case ILBaseValueTypeEnum.Int32:
+							return $" = new int{((this.arraySize > 0) ? $"[{this.arraySize}]" : "")}";
+
+						case ILBaseValueTypeEnum.Ptr16:
+							return $" = new {this.valueType.ReferencedType.CSDeclaration} *{((this.arraySize > 0) ? $"[{this.arraySize}]" : "")}";
+
+						case ILBaseValueTypeEnum.Ptr32:
+							return $" = new {this.valueType.ReferencedType.CSDeclaration} *{((this.arraySize > 0) ? $"[{this.arraySize}]" : "")}";
+
+						case ILBaseValueTypeEnum.FnPtr32:
+							return $" = new {this.valueType.ReferencedType.CSDeclaration} *{((this.arraySize > 0) ? $"[{this.arraySize}]" : "")}";
+
+						default:
+							return $" = new object{((this.arraySize > 0) ? "[]" : "")}";
+					}
+				}
+
+				return "";
 			}
 		}
 
@@ -58,183 +104,62 @@ namespace Disassembler
 			return this.Name;
 		}
 
-		public string ToCSDeclarationString()
-		{
-			StringBuilder sb = new StringBuilder();
-
-			if (this.scope == ILVariableScopeEnum.Global)
-			{
-				sb.Append("public ");
-			}
-
-			switch (this.type)
-			{
-				case ILValueTypeEnum.UInt8:
-					sb.Append("byte");
-					break;
-
-				case ILValueTypeEnum.Int8:
-					sb.Append("sbyte");
-					break;
-
-				case ILValueTypeEnum.Ptr16:
-				case ILValueTypeEnum.UInt16:
-					sb.Append("ushort");
-					break;
-
-				case ILValueTypeEnum.Int16:
-					sb.Append("short");
-					break;
-
-				case ILValueTypeEnum.Ptr32:
-				case ILValueTypeEnum.UInt32:
-					sb.Append("uint");
-					break;
-
-				case ILValueTypeEnum.Int32:
-					sb.Append("int");
-					break;
-
-				case ILValueTypeEnum.FnPtr32:
-					sb.Append("(void far *");
-					break;
-
-				default:
-					throw new Exception($"Undefined variable type {this.type}");
-			}
-
-			if (this.arraySize != 0)
-			{
-				sb.Append("[]");
-			}
-
-			switch (this.scope)
-			{
-				case ILVariableScopeEnum.LocalVariable:
-					sb.Append($" {this.Name}");
-					break;
-
-				case ILVariableScopeEnum.LocalParameter:
-					sb.Append($" {this.Name}");
-					break;
-
-				case ILVariableScopeEnum.Global:
-					sb.Append($" {this.Name}");
-					break;
-			}
-
-			if (this.arraySize != 0 && this.scope != ILVariableScopeEnum.LocalParameter)
-			{
-				switch (this.type)
-				{
-					case ILValueTypeEnum.UInt8:
-						sb.Append($" = new byte[{this.arraySize}]");
-						break;
-
-					case ILValueTypeEnum.Int8:
-						sb.Append($" = new sbyte[{this.arraySize}]");
-						break;
-
-					case ILValueTypeEnum.Ptr16:
-					case ILValueTypeEnum.UInt16:
-						sb.Append($" = new ushort[{this.arraySize}]");
-						break;
-
-					case ILValueTypeEnum.Int16:
-						sb.Append($" = new short[{this.arraySize}]");
-						break;
-
-					case ILValueTypeEnum.Ptr32:
-					case ILValueTypeEnum.UInt32:
-						sb.Append($" = new uint[{this.arraySize}]");
-						break;
-
-					case ILValueTypeEnum.Int32:
-						sb.Append($" = new int[{this.arraySize}]");
-						break;
-
-					case ILValueTypeEnum.FnPtr32:
-						sb.Append($")()");
-						break;
-
-					default:
-						throw new Exception($"Undefined variable type {this.type}");
-				}
-			}
-
-			switch (this.type)
-			{
-				case ILValueTypeEnum.UInt8:
-				case ILValueTypeEnum.Int8:
-				case ILValueTypeEnum.Ptr16:
-				case ILValueTypeEnum.UInt16:
-				case ILValueTypeEnum.Int16:
-				case ILValueTypeEnum.Ptr32:
-				case ILValueTypeEnum.UInt32:
-				case ILValueTypeEnum.Int32:
-					break;
-
-				case ILValueTypeEnum.FnPtr32:
-					sb.Append($")()");
-					break;
-
-				default:
-					throw new Exception($"Undefined variable type {this.type}");
-			}
-
-			return sb.ToString();
-		}
-
 		public override string ToString()
 		{
-			return this.ToCSString();
+			return this.Name;
 		}
 
-		public static ILValueTypeEnum FromCPUParameterSizeEnum(CPUParameterSizeEnum parameterType)
+		public ProgramFunction? Parent { get => this.parent; }
+
+		public string Name
 		{
-			switch (parameterType)
+			get
 			{
-				case CPUParameterSizeEnum.UInt8:
-					return ILValueTypeEnum.UInt8;
+				if (this.name != null)
+				{
+					return this.name;
+				}
+				else
+				{
+					switch (this.scope)
+					{
+						case ILVariableScopeEnum.LocalVariable:
+							return $"Local_{this.Offset:x}";
 
-				case CPUParameterSizeEnum.UInt16:
-					return ILValueTypeEnum.UInt16;
+						case ILVariableScopeEnum.LocalParameter:
+							return $"Param_{this.Offset:x}";
 
-				case CPUParameterSizeEnum.UInt32:
-					return ILValueTypeEnum.UInt32;
+						case ILVariableScopeEnum.Global:
+							return $"Global_{this.Offset:x}";
 
-				default:
-					return ILValueTypeEnum.Undefined;
+						default:
+							throw new Exception($"Undefined variable scope {this.scope}");
+					}
+				}
+			}
+			set
+			{
+				if (string.IsNullOrEmpty(value))
+				{
+					this.name = null;
+				}
+				else
+				{
+					this.name = value;
+				}
 			}
 		}
 
-		public ProgramFunction? Parent
-		{
-			get => this.parent;
-		}
+		public ILVariableScopeEnum Scope { get => this.scope; set => this.scope = value; }
 
-		public ILVariableScopeEnum Scope
-		{
-			get => this.scope;
-			set => this.scope = value;
-		}
+		public ILValueType ValueType { get => this.valueType; set => this.valueType = value; }
 
-		public ILValueTypeEnum Type
-		{
-			get => this.type;
-			set => this.type = value;
-		}
+		public int ArraySize { get => this.arraySize; set => this.arraySize = value; }
 
-		public int Offset
-		{
-			get => this.offset;
-			set => this.offset = value;
-		}
+		public int ValueTypeConfidence { get => this.valueTypeConfidence; set => this.valueTypeConfidence = Math.Min(Math.Max(value, 0), 10); }
 
-		public int ArraySize
-		{
-			get => this.arraySize;
-			set => this.arraySize = value;
-		}
+		public int Offset { get => this.offset; set => this.offset = value; }
+
+		public object? InitialValue { get => this.initialValue; set => this.initialValue = value; }
 	}
 }

@@ -1,16 +1,12 @@
 ﻿using Disassembler.CPU;
 using IRB.Collections.Generic;
-using System.Collections;
-using System.Reflection.Metadata;
 using System.Text;
-using System.Xml.Linq;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Disassembler
 {
 	public class FlowGraph
 	{
-		private ProgramFunction parent;
+		private ProgramFunction parentFunction;
 		private string name = "";
 
 		private FlowGraphNode? startNode = null;
@@ -27,15 +23,15 @@ namespace Disassembler
 
 		public FlowGraph(ProgramFunction fn)
 		{
-			this.parent = fn;
+			this.parentFunction = fn;
 		}
 
 		public FlowGraph(ProgramFunction fn, string name)
 		{
-			this.parent = fn;
+			this.parentFunction = fn;
 			this.name = name;
 
-			if (!this.parent.IsLibraryFunction)
+			if (!this.parentFunction.IsLibraryFunction)
 			{
 				ConstructGraph();
 				DetermineFunctionBPFrame();
@@ -53,23 +49,23 @@ namespace Disassembler
 			this.requiredLocals = FlowGraphLocalEnum.None;
 			this.definedLocals = FlowGraphLocalEnum.None;
 
-			int instructionCount = this.parent.AsmInstructions.Count;
-			int instructionPos = this.parent.GetInstructionPositionByLinearAddress(this.parent.FunctionEntryPoint);
+			int instructionCount = this.parentFunction.AsmInstructions.Count;
+			int instructionPos = this.parentFunction.GetInstructionPositionByLinearAddress(this.parentFunction.FunctionEntryPoint);
 
 			if (instructionPos < 0)
 			{
-				throw new Exception($"Expected instruction at 0x{this.parent.FunctionEntryPoint:x}");
+				throw new Exception($"Expected instruction at 0x{this.parentFunction.FunctionEntryPoint:x}");
 			}
 
 			this.startNode = CreateOrFindNode(0, FlowGraphNodeTypeEnum.Start, unprocessedNodes, false);
 
-			FlowGraphNode currentNode = CreateOrFindNode(this.parent.FunctionEntryPoint, FlowGraphNodeTypeEnum.Block, unprocessedNodes, false);
+			FlowGraphNode currentNode = CreateOrFindNode(this.parentFunction.FunctionEntryPoint, FlowGraphNodeTypeEnum.Block, unprocessedNodes, false);
 
 			this.startNode.ChildNodes.Add(currentNode);
 
 			while (instructionPos >= 0 && instructionPos < instructionCount)
 			{
-				CPUInstruction instruction = this.parent.AsmInstructions[instructionPos];
+				CPUInstruction instruction = this.parentFunction.AsmInstructions[instructionPos];
 				CPUParameter parameter;
 				FlowGraphNode newNode;
 				bool blockEnd = false;
@@ -295,7 +291,7 @@ namespace Disassembler
 								instructionPos++;
 								if (instructionPos < instructionCount)
 								{
-									instruction = this.parent.AsmInstructions[instructionPos];
+									instruction = this.parentFunction.AsmInstructions[instructionPos];
 									currentNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 								}
 								else
@@ -315,7 +311,7 @@ namespace Disassembler
 								instructionPos++;
 								if (instructionPos < instructionCount)
 								{
-									instruction = this.parent.AsmInstructions[instructionPos];
+									instruction = this.parentFunction.AsmInstructions[instructionPos];
 									newNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 								}
 								else
@@ -343,7 +339,7 @@ namespace Disassembler
 								instructionPos++;
 								if (instructionPos < instructionCount)
 								{
-									instruction = this.parent.AsmInstructions[instructionPos];
+									instruction = this.parentFunction.AsmInstructions[instructionPos];
 									currentNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 								}
 								else
@@ -363,7 +359,7 @@ namespace Disassembler
 								instructionPos++;
 								if (instructionPos < instructionCount)
 								{
-									instruction = this.parent.AsmInstructions[instructionPos];
+									instruction = this.parentFunction.AsmInstructions[instructionPos];
 									newNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 								}
 								else
@@ -391,7 +387,7 @@ namespace Disassembler
 								instructionPos++;
 								if (instructionPos < instructionCount)
 								{
-									instruction = this.parent.AsmInstructions[instructionPos];
+									instruction = this.parentFunction.AsmInstructions[instructionPos];
 									currentNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 								}
 								else
@@ -411,7 +407,7 @@ namespace Disassembler
 								instructionPos++;
 								if (instructionPos < instructionCount)
 								{
-									instruction = this.parent.AsmInstructions[instructionPos];
+									instruction = this.parentFunction.AsmInstructions[instructionPos];
 									newNode.ChildNodes.Add(CreateOrFindNode(instruction.LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true));
 								}
 								else
@@ -498,7 +494,7 @@ namespace Disassembler
 
 							if (instructionPos + 1 < instructionCount)
 							{
-								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+								newNode = CreateOrFindNode(this.parentFunction.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
 								currentNode.ChildNodes.Add(newNode);
 							}
 
@@ -510,7 +506,7 @@ namespace Disassembler
 
 							if (instructionPos + 1 < instructionCount)
 							{
-								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+								newNode = CreateOrFindNode(this.parentFunction.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
 								currentNode.ChildNodes.Add(newNode);
 							}
 
@@ -522,7 +518,7 @@ namespace Disassembler
 
 							if (instructionPos + 1 < instructionCount)
 							{
-								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+								newNode = CreateOrFindNode(this.parentFunction.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
 								currentNode.ChildNodes.Add(newNode);
 							}
 
@@ -534,7 +530,7 @@ namespace Disassembler
 
 							if (instructionPos + 1 < instructionCount)
 							{
-								newNode = CreateOrFindNode(this.parent.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
+								newNode = CreateOrFindNode(this.parentFunction.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
 								currentNode.ChildNodes.Add(newNode);
 							}
 
@@ -575,7 +571,7 @@ namespace Disassembler
 
 						if (node.LinearAddress != 0)
 						{
-							instructionPos = this.parent.GetInstructionPositionByLinearAddress(node.LinearAddress);
+							instructionPos = this.parentFunction.GetInstructionPositionByLinearAddress(node.LinearAddress);
 							if (instructionPos < 0)
 							{
 								throw new Exception($"Expected next instruction in {node.NodeType} block");
@@ -628,7 +624,7 @@ namespace Disassembler
 				if (node.NodeType != FlowGraphNodeTypeEnum.End && node.ChildNodes.Count == 0)
 				{
 					throw new Exception($"All nodes should have their children, except end node. " +
-						$"The childless node address: 0x{node.LinearAddress:x} in function {this.parent.Segment.ToString()}.{this.parent.Name}");
+						$"The childless node address: 0x{node.LinearAddress:x} in function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name}");
 				}
 			}
 		}
@@ -644,6 +640,71 @@ namespace Disassembler
 
 		private void DetermineFunctionBPFrame()
 		{
+			#region Try to consolidate multiple end nodes
+			while (this.endNodes.Count > 1)
+			{
+				FlowGraphNode endNode1 = this.endNodes[0].Value;
+				FlowGraphNode endNode2 = this.endNodes[1].Value;
+
+				if (endNode1.Equals(endNode2))
+				{
+					// we can safely consolidate nodes
+					if (endNode1.LinearAddress > endNode2.LinearAddress)
+					{
+						while (endNode2.ReferenceNodes.Count > 0)
+						{
+							FlowGraphNode refNode = endNode2.ReferenceNodes[0].Value;
+
+							endNode1.ReferenceNodes.Add(refNode.LinearAddress, refNode);
+							endNode2.ReferenceNodes.RemoveAt(0);
+
+							for (int i = 0; i < refNode.ChildNodes.Count; i++)
+							{
+								if (refNode.ChildNodes[i].LinearAddress == endNode2.LinearAddress)
+								{
+									refNode.ChildNodes[i] = endNode1;
+									break;
+								}
+							}
+						}
+
+						endNode2.ChildNodes.Clear();
+						endNode2.AsmInstructions.Clear();
+						this.nodes.RemoveByKey(endNode2.LinearAddress);
+						this.endNodes.RemoveByKey(endNode2.LinearAddress);
+					}
+					else
+					{
+						while (endNode1.ReferenceNodes.Count > 0)
+						{
+							FlowGraphNode refNode = endNode1.ReferenceNodes[0].Value;
+
+							endNode2.ReferenceNodes.Add(refNode.LinearAddress, refNode);
+							endNode1.ReferenceNodes.RemoveAt(0);
+
+							for (int i = 0; i < refNode.ChildNodes.Count; i++)
+							{
+								if (refNode.ChildNodes[i].LinearAddress == endNode1.LinearAddress)
+								{
+									refNode.ChildNodes[i] = endNode2;
+									break;
+								}
+							}
+						}
+
+						endNode1.ChildNodes.Clear();
+						endNode1.AsmInstructions.Clear();
+						this.nodes.RemoveByKey(endNode1.LinearAddress);
+						this.endNodes.RemoveByKey(endNode1.LinearAddress);
+					}
+				}
+				else
+				{
+					break;
+				}
+			}
+			#endregion
+
 			if (this.startNode != null && this.endNodes.Count == 1)
 			{
 				FlowGraphNode startNode = this.startNode;
@@ -654,112 +715,245 @@ namespace Disassembler
 				{
 					FlowGraphNode startNode1 = startNode.ChildNodes[0];
 
-					if (endNode.ReferenceNodes.Count == 1)
-					{
-						FlowGraphNode endNode1 = endNode.ReferenceNodes[0].Value;
+					bool endNodeBPFrame = true;
 
+					for (int i = 0; i < endNode.ReferenceNodes.Count; i++)
+					{
+						FlowGraphNode endNode1 = endNode.ReferenceNodes[i].Value;
 						int endNode1InstructionCount = endNode1.AsmInstructions.Count;
 
-						if (startNode1.AsmInstructions.Count > 4 && endNode1.AsmInstructions.Count > 1 &&
-							(instruction = startNode1.AsmInstructions[0]).InstructionType == CPUInstructionEnum.PUSH &&
-							instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
-							instruction.Parameters.Count == 1 &&
-							instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
-							instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
-
-							(instruction = startNode1.AsmInstructions[1]).InstructionType == CPUInstructionEnum.MOV &&
-							instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
-							instruction.Parameters.Count == 2 &&
-							instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
-							instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
-							instruction.Parameters[1].Type == CPUParameterTypeEnum.Register &&
-							instruction.Parameters[1].Value == (uint)CPURegisterEnum.SP &&
-
+						if (endNode1InstructionCount > 1 &&
 							(instruction = endNode1.AsmInstructions[endNode1InstructionCount - 1]).InstructionType == CPUInstructionEnum.POP &&
 							instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
 							instruction.Parameters.Count == 1 &&
 							instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
 							instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP)
 						{
-							// function satisfies basic C language frame
-							this.hasBPFrame = true;
+							endNodeBPFrame = true;
+						}
+						else
+						{
+							endNodeBPFrame = false;
+							break;
+						}
+					}
 
-							#region Adjust start block and end block instruction positions
-							// move frame instructions to start and end block
-							startNode.AsmInstructions.Add(startNode1.AsmInstructions[0]);
-							startNode1.AsmInstructions.RemoveAt(0);
-							startNode.AsmInstructions.Add(startNode1.AsmInstructions[0]);
-							startNode1.AsmInstructions.RemoveAt(0);
+					if (endNodeBPFrame && startNode1.AsmInstructions.Count > 4 &&
+						(instruction = startNode1.AsmInstructions[0]).InstructionType == CPUInstructionEnum.PUSH &&
+						instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+						instruction.Parameters.Count == 1 &&
+						instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+						instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
 
-							while (startNode1.AsmInstructions.Count > 0)
+						(instruction = startNode1.AsmInstructions[1]).InstructionType == CPUInstructionEnum.MOV &&
+						instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+						instruction.Parameters.Count == 2 &&
+						instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+						instruction.Parameters[0].Value == (uint)CPURegisterEnum.BP &&
+						instruction.Parameters[1].Type == CPUParameterTypeEnum.Register &&
+						instruction.Parameters[1].Value == (uint)CPURegisterEnum.SP)
+					{
+						// function satisfies basic C language frame
+						this.hasBPFrame = true;
+
+						#region Adjust start and end block instruction positions
+						// move frame instructions to start and end block
+						startNode.AsmInstructions.Add((instruction = startNode1.AsmInstructions[0]));
+						startNode1.AsmInstructions.RemoveAt(0);
+						startNode.AsmInstructions.Add(startNode1.AsmInstructions[0]);
+						startNode1.AsmInstructions.RemoveAt(0);
+
+						// Move required and verified POP BP instruction to endNode
+						for (int i = 0; i < endNode.ReferenceNodes.Count; i++)
+						{
+							FlowGraphNode endNode1 = endNode.ReferenceNodes[i].Value;
+							int endNode1InstructionCount = endNode1.AsmInstructions.Count;
+							CPUInstruction instruction1 = endNode1.AsmInstructions[endNode1InstructionCount - 1];
+
+							if (i == 0)
 							{
-								instruction = startNode1.AsmInstructions[0];
+								endNode.AsmInstructions.Insert(0, instruction1);
+							}
 
-								if (instruction.InstructionType == CPUInstructionEnum.SUB &&
-									instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
-									instruction.Parameters.Count == 2 &&
-									instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
-									instruction.Parameters[0].Value == (uint)CPURegisterEnum.SP &&
-									instruction.Parameters[1].Type == CPUParameterTypeEnum.Immediate)
+							endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
+						}
+
+						if (startNode1.AsmInstructions.Count > 0 &&
+							(instruction = startNode1.AsmInstructions[0]).InstructionType == CPUInstructionEnum.SUB &&
+							instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+							instruction.Parameters.Count == 2 &&
+							instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+							instruction.Parameters[0].Value == (uint)CPURegisterEnum.SP &&
+							instruction.Parameters[1].Type == CPUParameterTypeEnum.Immediate)
+						{
+							startNode.AsmInstructions.Add(instruction);
+							startNode1.AsmInstructions.RemoveAt(0);
+
+							this.parentFunction.LocalVariableSize = (int)instruction.Parameters[1].Value;
+							this.parentFunction.LocalVariablePosition += this.parentFunction.LocalVariableSize;
+						}
+
+						// move MOV SP, BP instruction in endBlock
+						for (int i = 0; i < endNode.ReferenceNodes.Count; i++)
+						{
+							FlowGraphNode endNode1 = endNode.ReferenceNodes[i].Value;
+							int endNode1InstructionCount = endNode1.AsmInstructions.Count;
+							CPUInstruction instruction1 = endNode1.AsmInstructions[endNode1InstructionCount - 1];
+
+							if (!(instruction1.InstructionType == CPUInstructionEnum.MOV &&
+								instruction1.OperandSize == CPUParameterSizeEnum.UInt16 &&
+								instruction1.Parameters.Count == 2 &&
+								instruction1.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+								instruction1.Parameters[0].Value == (uint)CPURegisterEnum.SP &&
+								instruction1.Parameters[1].Type == CPUParameterTypeEnum.Register &&
+								instruction1.Parameters[1].Value == (uint)CPURegisterEnum.BP))
+							{
+								if (i == 0)
 								{
-									startNode.AsmInstructions.Add(instruction);
-									startNode1.AsmInstructions.RemoveAt(0);
-
-									this.parent.LocalVariableSize = (int)instruction.Parameters[1].Value;
-									this.parent.LocalVariablePosition += this.parent.LocalVariableSize;
+									break;
 								}
-								else if (instruction.InstructionType == CPUInstructionEnum.PUSH)
+								else
 								{
-									CPUParameter parameter = instruction.Parameters[0];
+									throw new Exception($"Can't match start and end block BP frame instructions");
+								}
+							}
 
-									if (parameter.Type == CPUParameterTypeEnum.Register && parameter.Size == CPUParameterSizeEnum.UInt16)
+							if (i == 0)
+							{
+								endNode.AsmInstructions.Insert(0, instruction1);
+							}
+
+							endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
+						}
+
+						while (startNode1.AsmInstructions.Count > 0)
+						{
+							instruction = startNode1.AsmInstructions[0];
+
+							if (instruction.InstructionType == CPUInstructionEnum.PUSH)
+							{
+								CPUParameter parameter = instruction.Parameters[0];
+
+								if (parameter.Type == CPUParameterTypeEnum.Register && parameter.Size == CPUParameterSizeEnum.UInt16)
+								{
+									bool endBlock = true;
+
+									switch ((CPURegisterEnum)parameter.Value)
 									{
-										bool endBlock = true;
+										case CPURegisterEnum.SI:
+											if (this.usesSI)
+											{
+												throw new Exception($"In function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name}, the SI register is pushed more than once onto the stack");
+											}
+											this.usesSI = true;
+											endBlock = false;
 
-										switch ((CPURegisterEnum)parameter.Value)
-										{
-											case CPURegisterEnum.SI:
-												if (this.usesSI)
+											startNode.AsmInstructions.Add(instruction);
+											startNode1.AsmInstructions.RemoveAt(0);
+
+											// move matched instruction to endBlock
+											for (int i = 0; i < endNode.ReferenceNodes.Count; i++)
+											{
+												FlowGraphNode endNode1 = endNode.ReferenceNodes[i].Value;
+												int endNode1InstructionCount = endNode1.AsmInstructions.Count;
+												CPUInstruction instruction1 = endNode1.AsmInstructions[endNode1InstructionCount - 1];
+
+												if (instruction1.InstructionType != CPUInstructionEnum.POP || 
+													instruction.Parameters.Count != instruction1.Parameters.Count ||
+													!instruction.Parameters[0].Equals(instruction1.Parameters[0]))
 												{
-													throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the SI register is pushed more than once onto the stack");
+													throw new Exception($"Can't match start and end block BP frame instructions");
 												}
-												this.usesSI = true;
-												endBlock = false;
 
-												startNode.AsmInstructions.Add(instruction);
-												startNode1.AsmInstructions.RemoveAt(0);
-												break;
-
-											case CPURegisterEnum.DI:
-												if (this.usesDI)
+												if (i == 0)
 												{
-													throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the DI register is pushed more than once onto the stack");
+													endNode.AsmInstructions.Insert(0, instruction1);
 												}
-												this.usesDI = true;
-												endBlock = false;
 
-												startNode.AsmInstructions.Add(instruction);
-												startNode1.AsmInstructions.RemoveAt(0);
-												break;
-										}
-
-										if (endBlock)
-										{
+												endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
+											}
 											break;
-										}
+
+										case CPURegisterEnum.DI:
+											if (this.usesDI)
+											{
+												throw new Exception($"In function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name}, the DI register is pushed more than once onto the stack");
+											}
+											this.usesDI = true;
+											endBlock = false;
+
+											startNode.AsmInstructions.Add(instruction);
+											startNode1.AsmInstructions.RemoveAt(0);
+
+											// move matched instruction to endBlock
+											for (int i = 0; i < endNode.ReferenceNodes.Count; i++)
+											{
+												FlowGraphNode endNode1 = endNode.ReferenceNodes[i].Value;
+												int endNode1InstructionCount = endNode1.AsmInstructions.Count;
+												CPUInstruction instruction1 = endNode1.AsmInstructions[endNode1InstructionCount - 1];
+
+												if (instruction1.InstructionType != CPUInstructionEnum.POP ||
+													instruction.Parameters.Count != instruction1.Parameters.Count ||
+													!instruction.Parameters[0].Equals(instruction1.Parameters[0]))
+												{
+													throw new Exception($"Can't match start and end block BP frame instructions");
+												}
+
+												if (i == 0)
+												{
+													endNode.AsmInstructions.Insert(0, instruction1);
+												}
+
+												endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
+											}
+											break;
 									}
-									else if (parameter.Type == CPUParameterTypeEnum.SegmentRegister && parameter.Size == CPUParameterSizeEnum.UInt16 &&
-										(CPUSegmentRegisterEnum)parameter.Value == CPUSegmentRegisterEnum.DS)
+
+									if (endBlock)
+									{
+										break;
+									}
+								}
+								else if (parameter.Type == CPUParameterTypeEnum.SegmentRegister && parameter.Size == CPUParameterSizeEnum.UInt16 &&
+									(CPUSegmentRegisterEnum)parameter.Value == CPUSegmentRegisterEnum.DS)
+								{
+									CPUInstruction instruction1;
+
+									// sometimes at the start of the function PUSH DS, POP ES is used
+									if (startNode1.AsmInstructions.Count > 1 &&
+										(instruction1 = startNode1.AsmInstructions[1]).InstructionType != CPUInstructionEnum.POP)
 									{
 										if (this.usesDS)
 										{
-											throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the DS segment register is pushed more than once onto the stack");
+											throw new Exception($"In function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name}, the DS segment register is pushed more than once onto the stack");
 										}
 
 										this.usesDS = true;
 
 										startNode.AsmInstructions.Add(instruction);
 										startNode1.AsmInstructions.RemoveAt(0);
+
+										// move matched instruction to endBlock
+										for (int i = 0; i < endNode.ReferenceNodes.Count; i++)
+										{
+											FlowGraphNode endNode1 = endNode.ReferenceNodes[i].Value;
+											int endNode1InstructionCount = endNode1.AsmInstructions.Count;
+											instruction1 = endNode1.AsmInstructions[endNode1InstructionCount - 1];
+
+											if (instruction1.InstructionType != CPUInstructionEnum.POP ||
+												instruction.Parameters.Count != instruction1.Parameters.Count ||
+												!instruction.Parameters[0].Equals(instruction1.Parameters[0]))
+											{
+												throw new Exception($"Can't match start and end block BP frame instructions");
+											}
+
+											if (i == 0)
+											{
+												endNode.AsmInstructions.Insert(0, instruction1);
+											}
+
+											endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
+										}
 									}
 									else
 									{
@@ -771,95 +965,12 @@ namespace Disassembler
 									break;
 								}
 							}
-
-							endNode1InstructionCount = endNode1.AsmInstructions.Count;
-
-							endNode.AsmInstructions.Insert(0, endNode1.AsmInstructions[endNode1InstructionCount - 1]);
-							endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
-							endNode1InstructionCount--;
-
-							while (endNode1InstructionCount > 0)
+							else
 							{
-								instruction = endNode1.AsmInstructions[endNode1InstructionCount - 1];
-
-								if (instruction.InstructionType == CPUInstructionEnum.MOV &&
-									instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
-									instruction.Parameters.Count == 2 &&
-									instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
-									instruction.Parameters[0].Value == (uint)CPURegisterEnum.SP &&
-									instruction.Parameters[1].Type == CPUParameterTypeEnum.Register &&
-									instruction.Parameters[1].Value == (uint)CPURegisterEnum.BP)
-								{
-									endNode.AsmInstructions.Insert(0, instruction);
-									endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
-								}
-								else if (instruction.InstructionType == CPUInstructionEnum.POP)
-								{
-									CPUParameter parameter = instruction.Parameters[0];
-
-									if (parameter.Type == CPUParameterTypeEnum.Register && parameter.Size == CPUParameterSizeEnum.UInt16)
-									{
-										bool endBlock = true;
-
-										switch ((CPURegisterEnum)parameter.Value)
-										{
-											case CPURegisterEnum.SI:
-												if (!this.usesSI)
-												{
-													throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the SI register is not used, but is poped off the stack");
-												}
-												this.usesSI = true;
-												endBlock = false;
-
-												endNode.AsmInstructions.Insert(0, instruction);
-												endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
-												break;
-
-											case CPURegisterEnum.DI:
-												if (!this.usesDI)
-												{
-													throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the DI register is not used, but is poped off the stack");
-												}
-												this.usesDI = true;
-												endBlock = false;
-
-												endNode.AsmInstructions.Insert(0, instruction);
-												endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
-												break;
-										}
-
-										if (endBlock)
-										{
-											break;
-										}
-									}
-									else if (parameter.Type == CPUParameterTypeEnum.SegmentRegister && parameter.Size == CPUParameterSizeEnum.UInt16 &&
-										(CPUSegmentRegisterEnum)parameter.Value == CPUSegmentRegisterEnum.DS)
-									{
-										if (!this.usesDS)
-										{
-											throw new Exception($"In function {this.parent.Segment.ToString()}.{this.parent.Name}, the DS segment register is not used, but is poped off the stack");
-										}
-
-										this.usesDS = true;
-
-										endNode.AsmInstructions.Insert(0, instruction);
-										endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
-									}
-									else
-									{
-										break;
-									}
-								}
-								else
-								{
-									break;
-								}
-
-								endNode1InstructionCount--;
+								break;
 							}
-							#endregion
 						}
+						#endregion
 					}
 				}
 			}
@@ -868,7 +979,7 @@ namespace Disassembler
 		public void TranslateFunction()
 		{
 			// refuse to process assembly and library functions
-			if (!this.parent.IsLibraryFunction && this.hasBPFrame && this.startNode != null && this.endNodes.Count > 0)
+			if (!this.parentFunction.IsLibraryFunction && this.hasBPFrame && this.startNode != null && this.endNodes.Count > 0)
 			{
 				UndoCompilerOptimizations();
 				TranslateToIL();
@@ -896,7 +1007,7 @@ namespace Disassembler
 						{
 							case CPUInstructionEnum.CALL:
 								parameter = instruction.Parameters[0];
-								function = this.parent.Segment.Parent.FindFunction(0, instruction.Segment, (ushort)parameter.Value);
+								function = this.parentFunction.ParentSegment.ParentProgram.FindFunction(0, instruction.Segment, (ushort)parameter.Value);
 
 								if (function != null)
 								{
@@ -907,12 +1018,12 @@ namespace Disassembler
 										if (spInstruction == null)
 										{
 											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction at offset 0x{instruction.Offset:x} in " +
-												$"function {this.parent.Segment.ToString()}.{this.parent.Name}");
+												$"function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name}");
 										}
 										else if (spInstruction.Parameters[1].Value != function.ParameterSize)
 										{
-											Console.WriteLine($"Warning, parameter size doesn't match function call to {function.Segment.ToString()}.{function.Name} ({function.ParameterSize}), " +
-												$"in function {this.parent.Segment.ToString()}.{this.parent.Name} at offset 0x{instruction.Offset:x} ({spInstruction.Parameters[1].Value})");
+											Console.WriteLine($"Warning, parameter size doesn't match function call to {function.ParentSegment.Name}.{function.Name} ({function.ParameterSize}), " +
+												$"in function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name} at offset 0x{instruction.Offset:x} ({spInstruction.Parameters[1].Value})");
 										}
 									}
 								}
@@ -920,7 +1031,7 @@ namespace Disassembler
 
 							case CPUInstructionEnum.CALLF:
 								parameter = instruction.Parameters[0];
-								function = this.parent.Segment.Parent.FindFunction(0, instruction.Segment, (ushort)parameter.Value);
+								function = this.parentFunction.ParentSegment.ParentProgram.FindFunction(0, instruction.Segment, (ushort)parameter.Value);
 
 								if (function != null)
 								{
@@ -931,19 +1042,19 @@ namespace Disassembler
 										if (spInstruction == null)
 										{
 											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction at 0x{instruction.Offset:x} in " +
-												$"function {this.parent.Segment.ToString()}.{this.parent.Name}");
+												$"function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name}");
 										}
 										else if (spInstruction.Parameters[1].Value != function.ParameterSize)
 										{
-											Console.WriteLine($"Warning, parameter size doesn't match function call to {function.Segment.ToString()}.{function.Name} ({function.ParameterSize}), " +
-												$"in function {this.parent.Segment.ToString()}.{this.parent.Name} at offset 0x{instruction.Offset:x} ({spInstruction.Parameters[1].Value})");
+											Console.WriteLine($"Warning, parameter size doesn't match function call to {function.ParentSegment.Name}.{function.Name} ({function.ParameterSize}), " +
+												$"in function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name} at offset 0x{instruction.Offset:x} ({spInstruction.Parameters[1].Value})");
 										}
 									}
 								}
 								break;
 
 							case CPUInstructionEnum.CallOverlay:
-								function = this.parent.Segment.Parent.FindFunction((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value);
+								function = this.parentFunction.ParentSegment.ParentProgram.FindFunction((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value);
 
 								if (function != null)
 								{
@@ -954,67 +1065,15 @@ namespace Disassembler
 										if (spInstruction == null)
 										{
 											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction at 0x{instruction.Offset:x} in " +
-												$"function {this.parent.Segment.ToString()}.{this.parent.Name}");
+												$"function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name}");
 										}
 										else if (spInstruction.Parameters[1].Value != function.ParameterSize)
 										{
-											Console.WriteLine($"Warning, parameter size doesn't match function call to {function.Segment.ToString()}.{function.Name} ({function.ParameterSize}), " +
-												$"in function {this.parent.Segment.ToString()}.{this.parent.Name} at offset 0x{instruction.Offset:x} ({spInstruction.Parameters[1].Value})");
+											Console.WriteLine($"Warning, parameter size doesn't match function call to {function.ParentSegment.Name}.{function.Name} ({function.ParameterSize}), " +
+												$"in function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name} at offset 0x{instruction.Offset:x} ({spInstruction.Parameters[1].Value})");
 										}
 									}
 								}
-								break;
-						}
-					}
-				}
-			}
-			#endregion
-
-			#region Merge call parameter blocks if they are in different blocks
-			for (int i = 0; i < this.nodes.Count; i++)
-			{
-				FlowGraphNode node = this.nodes[i].Value;
-
-				if (node.NodeType != FlowGraphNodeTypeEnum.Start && node.NodeType != FlowGraphNodeTypeEnum.End)
-				{
-					for (int j = 0; j < node.AsmInstructions.Count; j++)
-					{
-						CPUInstruction instruction = node.AsmInstructions[j];
-						CPUInstruction instruction1;
-						CPUParameter parameter;
-						ProgramFunction? function;
-
-						int parameterSize = 0;
-
-						switch (instruction.InstructionType)
-						{
-							case CPUInstructionEnum.CALL:
-								// get parameter size if possible
-								// only direct ADD SP, ? instruction is important because some functions can have different number of parameters
-								if (j + 1 < node.AsmInstructions.Count)
-								{
-									instruction1 = node.AsmInstructions[j + 1];
-
-									if (instruction.InstructionType == CPUInstructionEnum.ADD &&
-										instruction.Parameters.Count == 2 &&
-										instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
-										instruction.Parameters[0].RegisterValue == CPURegisterEnum.SP)
-									{
-										parameterSize = (int)instruction.Parameters[1].Value;
-									}
-								}
-
-								if (parameterSize > 0)
-								{
-									// backtrack parameters and merge block if necessary
-									CheckAndMergeCallParameterBlock(node, j, parameterSize);
-								}
-								break;
-
-							case CPUInstructionEnum.CALLF:
-								break;
-
-							case CPUInstructionEnum.CallOverlay:
 								break;
 						}
 					}
@@ -1142,13 +1201,6 @@ namespace Disassembler
 			return spInstruction;
 		}
 
-		private void CheckAndMergeCallParameterBlock(FlowGraphNode node, int instructionIndex, int parameterSize)
-		{
-			int sizeCount = 0;
-
-
-		}
-
 		private void TranslateToIL()
 		{
 			BDictionary<CPURegisterEnum, ILExpression> localRegisters = new();
@@ -1157,12 +1209,12 @@ namespace Disassembler
 			// sometimes the function call doesn't adjust SP (for the length of the parameters) at the end of the function
 			Stack<ILExpression> localStack = new Stack<ILExpression>();
 
-			this.parent.Variables.Clear();
+			//this.parentFunction.LocalVariables.Clear();
 
 			//Console.WriteLine($"Translating '{this.parent.Parent.ToString()}.{this.parent.Name}'");
 
-			localSegments.Add(CPUSegmentRegisterEnum.DS, this.parent.Segment.Parent.DefaultDS);
-			localSegments.Add(CPUSegmentRegisterEnum.ES, this.parent.Segment.Parent.DefaultDS);
+			localSegments.Add(CPUSegmentRegisterEnum.DS, this.parentFunction.ParentSegment.ParentProgram.DefaultDS);
+			localSegments.Add(CPUSegmentRegisterEnum.ES, this.parentFunction.ParentSegment.ParentProgram.DefaultDS);
 
 			this.startNode!.TranslateToIL(localRegisters, localSegments, localStack);
 		}
@@ -2197,7 +2249,7 @@ namespace Disassembler
 			writer.Close();
 		}
 
-		public ProgramFunction Parent { get => this.parent; }
+		public ProgramFunction ParentFunction { get => this.parentFunction; }
 
 		public string Name { get => this.name; set => this.name = value; }
 

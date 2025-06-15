@@ -34,6 +34,7 @@ internal class Program
 
 		// process Main code
 		Console.WriteLine("Loading EXE");
+
 		MZExecutable mainEXE = new MZExecutable($@"..\..\..\..\..\..\Civilization Games\Civ I\Dos\CIV{version}.EXE");
 
 		int baseAddress = mainEXE.InitialCS * 16;
@@ -116,11 +117,62 @@ internal class Program
 		MainProgram mainProgram = new MainProgram(mainEXE, libraryMatches);
 		mainProgram.DefaultDS = newDS;
 
+		// add API functions
+
+		// Word registers
+		ILValueType wordRegs = new("WORDREGS", ILBaseValueTypeEnum.Struct);
+		wordRegs.MemberObjects.Add(new("ax", ILBaseValueTypeEnum.UInt16));
+		wordRegs.MemberObjects.Add(new("bx", ILBaseValueTypeEnum.UInt16));
+		wordRegs.MemberObjects.Add(new("cx", ILBaseValueTypeEnum.UInt16));
+		wordRegs.MemberObjects.Add(new("dx", ILBaseValueTypeEnum.UInt16));
+		wordRegs.MemberObjects.Add(new("si", ILBaseValueTypeEnum.UInt16));
+		wordRegs.MemberObjects.Add(new("di", ILBaseValueTypeEnum.UInt16));
+		wordRegs.MemberObjects.Add(new("cflag", ILBaseValueTypeEnum.UInt16));
+		mainProgram.CustomValueTypes.Add(wordRegs.TypeName, wordRegs);
+
+		// Byte registers
+		ILValueType byteRegs = new("BYTEREGS", ILBaseValueTypeEnum.Struct);
+		wordRegs.MemberObjects.Add(new("al", ILBaseValueTypeEnum.UInt8));
+		wordRegs.MemberObjects.Add(new("ah", ILBaseValueTypeEnum.UInt8));
+		wordRegs.MemberObjects.Add(new("bl", ILBaseValueTypeEnum.UInt8));
+		wordRegs.MemberObjects.Add(new("bh", ILBaseValueTypeEnum.UInt8));
+		wordRegs.MemberObjects.Add(new("cl", ILBaseValueTypeEnum.UInt8));
+		wordRegs.MemberObjects.Add(new("ch", ILBaseValueTypeEnum.UInt8));
+		wordRegs.MemberObjects.Add(new("dl", ILBaseValueTypeEnum.UInt8));
+		wordRegs.MemberObjects.Add(new("dh", ILBaseValueTypeEnum.UInt8));
+		mainProgram.CustomValueTypes.Add(byteRegs.TypeName, byteRegs);
+
+		// Registers union (Overlays the corresponding word and byte registers)
+		ILValueType regs = new("REGS", ILBaseValueTypeEnum.Union);
+		wordRegs.MemberObjects.Add(new("x", ILBaseValueTypeEnum.Struct, wordRegs));
+		wordRegs.MemberObjects.Add(new("h", ILBaseValueTypeEnum.Struct, byteRegs));
+		mainProgram.CustomValueTypes.Add(regs.TypeName, regs);
+
+		// Define FILE structure as a single pointer
+		ILValueType file = new("FILE", ILBaseValueTypeEnum.DirectObject);
+		mainProgram.CustomValueTypes.Add(file.TypeName, file);
+
+		ILValueType filePtr = new("FILE *", ILBaseValueTypeEnum.Ptr16, file);
+		mainProgram.CustomValueTypes.Add(filePtr.TypeName, filePtr);
+
+		// int _CDECL int86(int, union REGS *, union REGS *);
+		mainProgram.APIFunctions.Add("int86", new APIFunctionDefinition("int86", 
+			[new("intnum", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10),
+			new("inregs", ILVariableScopeEnum.LocalParameter, new ILValueType(ILBaseValueTypeEnum.Ptr16, regs), 8, 10),
+			new("outregs", ILVariableScopeEnum.LocalParameter, new ILValueType(ILBaseValueTypeEnum.Ptr16, regs), 10, 10)], 
+			new(ILVariableScopeEnum.LocalVariable, mainProgram.IntValueType, 0, 10)));
+
+		// FILE * _CDECL fopen(const char *, const char *);
+		mainProgram.APIFunctions.Add("fopen", new APIFunctionDefinition("fopen",
+			[new("filename", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10),
+			new("mode", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 8, 10)],
+			new(ILVariableScopeEnum.LocalVariable, filePtr, 0, 10)));
+
 		Console.WriteLine("Disassembling");
 
 		// we start by decompiling Main function
 		ProgramFunction function = mainProgram.Disassemble(0, mainCS, mainIP, "Main");
-		function.ReturnType = CPUParameterSizeEnum.UInt16;
+		function.ReturnValue = new ILVariable(function, ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 0, 10);
 
 		// a way to dissassemble functions which are referenced by a pointer, like interrupt functions and such
 		switch (version)
@@ -286,65 +338,27 @@ internal class Program
 		StreamWriter initWriter = new StreamWriter($"{codePath}\\InitsAsm.cs");
 		StreamWriter getWriter = new StreamWriter($"{codePath}\\GettersAms.cs");
 
-		// enumerate Main segments and their functions
+		mainProgram.AssignOrdinals();
+
 		uint[] segmentOffsets = mainProgram.Segments.Keys.ToArray();
 
 		Array.Sort(segmentOffsets);
-
-		for (int i = 0; i < segmentOffsets.Length; i++)
-		{
-			ProgramSegment segment = mainProgram.Segments.GetValueByKey(segmentOffsets[i]);
-			segment.Ordinal = i;
-
-			ushort[] functionOffsets = segment.Functions.Keys.ToArray();
-
-			Array.Sort(functionOffsets);
-
-			for (int j = 0; j < functionOffsets.Length; j++)
-			{
-				function = segment.Functions.GetValueByKey(functionOffsets[j]);
-
-				function.Ordinal = j + 1;
-			}
-		}
-
-		for (int i = 0; i < mainProgram.Segments.Count; i++)
-		{
-			ProgramSegment segment = mainProgram.Segments[i].Value;
-
-			for (int j = 0; j < segment.Functions.Count; j++)
-			{
-				function = segment.Functions[j].Value;
-
-				if (function.FlowGraph != null)
-				{
-					function.FlowGraph.TranslateFunction();
-				}
-			}
-		}
 
 		// emit Main code
 		for (int i = 0; i < segmentOffsets.Length; i++)
 		{
 			ProgramSegment segment = mainProgram.Segments.GetValueByKey(segmentOffsets[i]);
 
-			segment.WriteAsmCS(codePath, 1);
+			segment.WriteAsmCS(codePath, 0);
 
-			objectWriter.WriteLine($"private {segment.ToString()} o{segment.ToString()};");
-			initWriter.WriteLine($"this.o{segment.ToString()} = new {segment.ToString()}(this);");
-			getWriter.WriteLine($"public {segment.ToString()} {segment.ToString()}");
+			objectWriter.WriteLine($"private {segment.Name} o{segment.Name};");
+			initWriter.WriteLine($"this.o{segment.Name} = new {segment.Name}(this);");
+			getWriter.WriteLine($"public {segment.Name} {segment.Name}");
 			getWriter.WriteLine("{");
-			getWriter.WriteLine($"\tget {{ return this.o{segment.ToString()};}}");
+			getWriter.WriteLine($"\tget {{ return this.o{segment.Name};}}");
 			getWriter.WriteLine("}");
 			getWriter.WriteLine();
 		}
-
-		/*int iMaxOverlaySize = 0;
-		for (int i = 0; i < mainEXE.Overlays.Count; i++)
-		{
-			iMaxOverlaySize = Math.Max(iMaxOverlaySize, mainEXE.Overlays[i].Data.Length);
-		}
-		Console.WriteLine($"Maximum overlay size in bytes: 0x{iMaxOverlaySize:x4}");*/
 
 		// Emit flow graphs
 		if (mainProgram.Segments.ContainsKey(0x0))
@@ -357,7 +371,6 @@ internal class Program
 
 				if (function.FlowGraph != null)
 				{
-					//function.Graph.ConstructGraph();
 					function.FlowGraph.WriteGraphDOT("test.gv");
 				}
 			}

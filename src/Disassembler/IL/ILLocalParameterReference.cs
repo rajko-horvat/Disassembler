@@ -34,7 +34,7 @@ namespace Disassembler
 				throw new Exception("Can't find referenced function parameter");
 			}
 
-			return this.parent.Parameters.GetValueByKey(this.offset).ToCSDeclarationString();
+			return this.parent.Parameters.GetValueByKey(this.offset).CSDeclaration;
 		}
 
 		public ProgramFunction Parent

@@ -6,8 +6,7 @@ namespace Disassembler.CPU
 	public class CPUParameter
 	{
 		private CPUParameterTypeEnum eType = CPUParameterTypeEnum.Undefined;
-		private CPUParameterReferenceEnum eReferenceType = CPUParameterReferenceEnum.None;
-		// default size is word
+		// default size is UInt16
 		private CPUParameterSizeEnum eSize = CPUParameterSizeEnum.UInt16;
 		// default segment which memory access uses
 		private CPUSegmentRegisterEnum eDefaultDataSegment = CPUSegmentRegisterEnum.DS;
@@ -82,12 +81,6 @@ namespace Disassembler.CPU
 		public CPUParameterTypeEnum Type
 		{
 			get { return this.eType; }
-		}
-
-		public CPUParameterReferenceEnum ReferenceType
-		{
-			get { return this.eReferenceType; }
-			set { this.eReferenceType = value; }
 		}
 
 		public CPUParameterSizeEnum Size
@@ -185,18 +178,6 @@ namespace Disassembler.CPU
 		public override string ToString()
 		{
 			StringBuilder sb = new StringBuilder();
-
-			switch (this.eReferenceType)
-			{
-				case CPUParameterReferenceEnum.Offset:
-					sb.Append("offset ");
-					break;
-				case CPUParameterReferenceEnum.Segment:
-					sb.Append("segment ");
-					break;
-				default:
-					break;
-			}
 
 			switch (this.eType)
 			{
@@ -848,6 +829,17 @@ namespace Disassembler.CPU
 			}
 
 			return sbValue.ToString();
+		}
+
+		public bool Equals(CPUParameter parameter1)
+		{
+			if (this.eType == parameter1.eType && this.eSize == parameter1.eSize && this.eDataSegment == parameter1.eDataSegment &&
+				this.segment == parameter1.segment && this.value == parameter1.value && this.displacement == parameter1.displacement)
+			{
+				return true;
+			}
+
+			return false;
 		}
 	}
 }

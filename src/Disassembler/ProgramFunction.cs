@@ -14,7 +14,7 @@ namespace Disassembler
 		private string? name;
 		private bool isLibraryFunction = false;
 		private ProgramFunctionTypeEnum callType = ProgramFunctionTypeEnum.Cdecl;
-		private CPUParameterSizeEnum returnType = CPUParameterSizeEnum.Undefined;
+		private ILVariable returnValue;
 		private int stackSize = 0;
 		private BDictionary<int, ILVariable> localParameters = new BDictionary<int, ILVariable>();
 		private BDictionary<int, ILVariable> localVariables = new BDictionary<int, ILVariable>();
@@ -32,6 +32,7 @@ namespace Disassembler
 			this.fnOffset = offset;
 			this.fnEntryPoint = MainProgram.ToLinearAddress(segment.CPUSegment, offset);
 			this.name = name;
+			this.returnValue = new(this, this.parentSegment.ParentProgram.VoidValueType, 0);
 		}
 
 		public void Disassemble()
@@ -48,16 +49,16 @@ namespace Disassembler
 
 			if (this.parentSegment.CPUOverlay > 0)
 			{
-				exeData = this.parentSegment.Parent.Executable.Overlays[this.parentSegment.CPUOverlay - 1].Data;
+				exeData = this.parentSegment.ParentProgram.Executable.Overlays[this.parentSegment.CPUOverlay - 1].Data;
 			}
 			else
 			{
-				exeData = this.parentSegment.Parent.Executable.Data;
+				exeData = this.parentSegment.ParentProgram.Executable.Data;
 			}
 
 			if (fnAddress >= exeData.Length)
 			{
-				throw new Exception($"Trying to disassemble outside of executable range in function {this.parentSegment.ToString()}.{this.Name}, 0x{fnAddress:x}");
+				throw new Exception($"Trying to disassemble outside of executable range in function {this.parentSegment.Name}.{this.Name}, 0x{fnAddress:x}");
 			}
 
 			MemoryStream stream = new(exeData);
@@ -71,7 +72,7 @@ namespace Disassembler
 
 				if (fnAddress >= stream.Length)
 				{
-					throw new Exception($"Trying to disassemble outside of executable range in function {this.parentSegment.ToString()}.{this.Name}, 0x{fnAddress:x}");
+					throw new Exception($"Trying to disassemble outside of executable range in function {this.parentSegment.Name}.{this.Name}, 0x{fnAddress:x}");
 				}
 
 				for (int i = 0; i < this.asmInstructions.Count; i++)
@@ -102,7 +103,7 @@ namespace Disassembler
 							}
 							else if (parameter.Type == CPUParameterTypeEnum.MemoryAddress && parameter.Value == 6)
 							{
-								throw new Exception($"Relative jump to {parameter.ToString()} in function {this.parentSegment.ToString()}.{this.Name} " +
+								throw new Exception($"Relative jump to {parameter.ToString()} in function {this.parentSegment.Name}.{this.Name} " +
 									$"(Instruction at 0x{instruction.LinearAddress:x})");
 							}
 							else if (parameter.Type == CPUParameterTypeEnum.MemoryAddress)
@@ -113,7 +114,7 @@ namespace Disassembler
 							}
 							else
 							{
-								Console.WriteLine($"Jump to computed address {parameter.ToString()} in function {this.parentSegment.ToString()}.{this.Name} " +
+								Console.WriteLine($"Jump to computed address {parameter.ToString()} in function {this.parentSegment.Name}.{this.Name} " +
 									$"(Instruction at 0x{instruction.LinearAddress:x})");
 								// treat this as end of a instruction stream
 								bEnd = true;
@@ -129,7 +130,7 @@ namespace Disassembler
 								if (fnAddress == 0)
 								{
 									this.parentSegment.GlobalVariables.Add((int)(instruction.Offset + 1), new ILVariable(this, ILVariableScopeEnum.Global,
-										ILValueTypeEnum.FnPtr32, (int)(instruction.Offset + 1)));
+										new ILValueType(ILBaseValueTypeEnum.FnPtr32), (int)(instruction.Offset + 1)));
 									// treat this as end of a instruction stream
 									bEnd = true;
 								}
@@ -140,7 +141,7 @@ namespace Disassembler
 							}
 							else
 							{
-								Console.WriteLine($"Jump to {parameter.ToString()} in function {this.parentSegment.ToString()}.{this.Name} " +
+								Console.WriteLine($"Jump to {parameter.ToString()} in function {this.parentSegment.Name}.{this.Name} " +
 									$"(Instruction at 0x{instruction.LinearAddress:x})");
 								// treat this as end of a instruction stream
 								bEnd = true;
@@ -151,7 +152,7 @@ namespace Disassembler
 							parameter = instruction.Parameters[1];
 							if (parameter.Type != CPUParameterTypeEnum.Immediate)
 								throw new Exception(
-									$"Relative offset expected, but got indirect parameter {parameter.ToString()} in function {this.parentSegment.ToString()}.{this.Name} " +
+									$"Relative offset expected, but got indirect parameter {parameter.ToString()} in function {this.parentSegment.Name}.{this.Name} " +
 									$"(Instruction at 0x{instruction.LinearAddress:x})");
 							aJumps.Add((uint)(fnSegment + parameter.Value));
 							break;
@@ -163,7 +164,7 @@ namespace Disassembler
 							parameter = instruction.Parameters[0];
 							if (parameter.Type != CPUParameterTypeEnum.Immediate)
 								throw new Exception(
-									$"Relative offset expected, but got indirect parameter {parameter.ToString()} in function {this.parentSegment.ToString()}.{this.Name} " +
+									$"Relative offset expected, but got indirect parameter {parameter.ToString()} in function {this.parentSegment.Name}.{this.Name} " +
 									$"(Instruction at 0x{instruction.LinearAddress:x})");
 
 							aJumps.Add((uint)(fnSegment + parameter.Value));
@@ -229,17 +230,17 @@ namespace Disassembler
 							// convert near return to far return
 							if ((this.callType & ProgramFunctionTypeEnum.Far) == ProgramFunctionTypeEnum.Far)
 							{
-								Console.WriteLine($"Inconsistent function return type in {this.parentSegment.ToString()}.{this.Name}");
+								Console.WriteLine($"Inconsistent function return type in {this.parentSegment.Name}.{this.Name}");
 							}
 							this.callType |= ProgramFunctionTypeEnum.Near;
 
 							if (instruction.Parameters.Count == 1 && (this.callType & ProgramFunctionTypeEnum.Cdecl) == ProgramFunctionTypeEnum.Cdecl)
 							{
-								Console.WriteLine($"Inconsistent function call type in {this.parentSegment.ToString()}.{this.Name}");
+								Console.WriteLine($"Inconsistent function call type in {this.parentSegment.Name}.{this.Name}");
 							}
 							else if (instruction.Parameters.Count == 0 && (this.callType & ProgramFunctionTypeEnum.Pascal) == ProgramFunctionTypeEnum.Pascal)
 							{
-								Console.WriteLine($"Inconsistent function call type in {this.parentSegment.ToString()}.{this.Name}");
+								Console.WriteLine($"Inconsistent function call type in {this.parentSegment.Name}.{this.Name}");
 							}
 							else
 							{
@@ -258,17 +259,17 @@ namespace Disassembler
 						case CPUInstructionEnum.RETF:
 							if ((this.callType & ProgramFunctionTypeEnum.Near) == ProgramFunctionTypeEnum.Near)
 							{
-								Console.WriteLine($"Inconsistent function return type in {this.parentSegment.ToString()}.{this.Name}");
+								Console.WriteLine($"Inconsistent function return type in {this.parentSegment.Name}.{this.Name}");
 							}
 							this.callType |= ProgramFunctionTypeEnum.Far;
 
 							if (instruction.Parameters.Count == 1 && (this.callType & ProgramFunctionTypeEnum.Cdecl) == ProgramFunctionTypeEnum.Cdecl)
 							{
-								Console.WriteLine($"Inconsistent function call type in {this.parentSegment.ToString()}.{this.Name}");
+								Console.WriteLine($"Inconsistent function call type in {this.parentSegment.Name}.{this.Name}");
 							}
 							else if (instruction.Parameters.Count == 0 && (this.callType & ProgramFunctionTypeEnum.Pascal) == ProgramFunctionTypeEnum.Pascal)
 							{
-								Console.WriteLine($"Inconsistent function call type in {this.parentSegment.ToString()}.{this.Name}");
+								Console.WriteLine($"Inconsistent function call type in {this.parentSegment.Name}.{this.Name}");
 							}
 							else
 							{
@@ -287,7 +288,7 @@ namespace Disassembler
 						case CPUInstructionEnum.IRET:
 							if ((this.callType & ProgramFunctionTypeEnum.Near) == ProgramFunctionTypeEnum.Near)
 							{
-								Console.WriteLine($"Inconsistent function return type in {this.parentSegment.ToString()}.{this.Name}");
+								Console.WriteLine($"Inconsistent function return type in {this.parentSegment.Name}.{this.Name}");
 							}
 							this.callType |= ProgramFunctionTypeEnum.Far;
 
@@ -463,7 +464,7 @@ namespace Disassembler
 								else
 								{
 									instruction1 = this.asmInstructions[iPos];
-									Console.WriteLine($"Undefined switch pattern {instruction1.Parameters[0].ToString()} in function {this.parentSegment.ToString()}.{this.Name} " +
+									Console.WriteLine($"Undefined switch pattern {instruction1.Parameters[0].ToString()} in function {this.parentSegment.Name}.{this.Name} " +
 										$"(Instruction at 0x{instruction1.LinearAddress:x})");
 									//break;
 								}
@@ -471,7 +472,7 @@ namespace Disassembler
 						}
 						else
 						{
-							Console.WriteLine($"Can't find location of switch statement in function {this.parentSegment.ToString()}.{this.Name} " +
+							Console.WriteLine($"Can't find location of switch statement in function {this.parentSegment.Name}.{this.Name} " +
 								$"(Instruction at 0x{fnAddress:x})");
 						}
 						continue;
@@ -512,7 +513,7 @@ namespace Disassembler
 				retInstruction = new CPUInstruction(this.parentSegment.CPUSegment, (ushort)(lastInstructionOffset + 1), CPUInstructionEnum.RETF, CPUParameterSizeEnum.UInt16);
 				this.asmInstructions.Add(retInstruction);
 
-				Console.WriteLine($"Warning, the function {this.parentSegment.ToString()}.{this.Name} doesn't have return instruction, adding one.");
+				Console.WriteLine($"Warning, the function {this.parentSegment.Name}.{this.Name} doesn't have return instruction, adding one.");
 			}
 			#endregion
 
@@ -864,7 +865,7 @@ namespace Disassembler
 								{
 									case 2: // [BP + SI]
 									case 3: // [BP + DI]
-										Console.WriteLine($"Stack parameter with register offset {parameter.ToString()} in function {this.parentSegment.ToString()}.{this.Name} " +
+										Console.WriteLine($"Stack parameter with register offset {parameter.ToString()} in function {this.parentSegment.Name}.{this.Name} " +
 											$"(Instruction at 0x{instruction.LinearAddress:x})");
 										break;
 
@@ -888,7 +889,8 @@ namespace Disassembler
 
 											if (!this.localVariables.ContainsKey(varOffset))
 											{
-												ILVariable variable = new ILVariable(this, ILVariableScopeEnum.LocalVariable, instruction.OperandSize, varOffset);
+												ILVariable variable = new ILVariable(this, ILVariableScopeEnum.LocalVariable, 
+													this.parentSegment.ParentProgram.FromCPUParameterSizeEnum(instruction.OperandSize), varOffset);
 												variable.ArraySize = 1;
 												this.localVariables.Add(varOffset, variable);
 											}
@@ -906,7 +908,8 @@ namespace Disassembler
 
 											if (!this.localParameters.ContainsKey(varOffset))
 											{
-												ILVariable variable = new ILVariable(this, ILVariableScopeEnum.LocalParameter, instruction.OperandSize, varOffset);
+												ILVariable variable = new ILVariable(this, ILVariableScopeEnum.LocalParameter, 
+													this.parentSegment.ParentProgram.FromCPUParameterSizeEnum(instruction.OperandSize), varOffset);
 												variable.ArraySize = 1;
 												this.localParameters.Add(varOffset, variable);
 											}
@@ -938,7 +941,8 @@ namespace Disassembler
 
 											if (!this.localVariables.ContainsKey(varOffset))
 											{
-												ILVariable variable = new ILVariable(this, ILVariableScopeEnum.LocalVariable, instruction.OperandSize, varOffset);
+												ILVariable variable = new ILVariable(this, ILVariableScopeEnum.LocalVariable, 
+													this.parentSegment.ParentProgram.FromCPUParameterSizeEnum(instruction.OperandSize), varOffset);
 												variable.ArraySize = 1;
 												this.localVariables.Add(varOffset, variable);
 											}
@@ -956,7 +960,8 @@ namespace Disassembler
 
 											if (!this.localParameters.ContainsKey(varOffset))
 											{
-												ILVariable variable = new ILVariable(this, ILVariableScopeEnum.LocalParameter, instruction.OperandSize, varOffset);
+												ILVariable variable = new ILVariable(this, ILVariableScopeEnum.LocalParameter,
+													this.parentSegment.ParentProgram.FromCPUParameterSizeEnum(instruction.OperandSize), varOffset);
 												variable.ArraySize = 1;
 												this.localParameters.Add(varOffset, variable);
 											}
@@ -988,7 +993,8 @@ namespace Disassembler
 
 											if (!this.localVariables.ContainsKey(varOffset))
 											{
-												this.localVariables.Add(varOffset, new ILVariable(this, instruction.OperandSize, varOffset));
+												this.localVariables.Add(varOffset, new ILVariable(this,
+													this.parentSegment.ParentProgram.FromCPUParameterSizeEnum(instruction.OperandSize), varOffset));
 											}
 										}
 										else if (varOffset > 0)
@@ -999,7 +1005,8 @@ namespace Disassembler
 
 											if (!this.localParameters.ContainsKey(varOffset))
 											{
-												this.localParameters.Add(varOffset, new ILVariable(this, ILVariableScopeEnum.LocalParameter, instruction.OperandSize, varOffset));
+												this.localParameters.Add(varOffset, new ILVariable(this, ILVariableScopeEnum.LocalParameter,
+													this.parentSegment.ParentProgram.FromCPUParameterSizeEnum(instruction.OperandSize), varOffset));
 											}
 										}
 										break;
@@ -1120,11 +1127,11 @@ namespace Disassembler
 
 						if (parameter.Type == CPUParameterTypeEnum.Immediate)
 						{
-							function = this.parentSegment.Parent.FindFunction(0, this.parentSegment.CPUSegment, (ushort)parameter.Value);
+							function = this.parentSegment.ParentProgram.FindFunction(0, this.parentSegment.CPUSegment, (ushort)parameter.Value);
 							if (function == null)
 							{
 								// function is not yet defined, define it
-								this.parentSegment.Parent.Disassemble(0, this.parentSegment.CPUSegment, (ushort)parameter.Value, null);
+								this.parentSegment.ParentProgram.Disassemble(0, this.parentSegment.CPUSegment, (ushort)parameter.Value, null);
 							}
 						}
 						break;
@@ -1133,11 +1140,11 @@ namespace Disassembler
 						parameter = instruction.Parameters[0];
 						if (parameter.Type == CPUParameterTypeEnum.SegmentOffset)
 						{
-							function = this.parentSegment.Parent.FindFunction(0, parameter.Segment, (ushort)parameter.Value);
+							function = this.parentSegment.ParentProgram.FindFunction(0, parameter.Segment, (ushort)parameter.Value);
 							if (function == null)
 							{
 								// function is not yet defined, define it
-								this.parentSegment.Parent.Disassemble(0, parameter.Segment, (ushort)parameter.Value, null);
+								this.parentSegment.ParentProgram.Disassemble(0, parameter.Segment, (ushort)parameter.Value, null);
 							}
 						}
 						break;
@@ -1148,11 +1155,11 @@ namespace Disassembler
 							throw new Exception("Overlay manager references overlay 0");
 						}
 
-						function = this.parentSegment.Parent.FindFunction((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value);
+						function = this.parentSegment.ParentProgram.FindFunction((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value);
 						if (function == null)
 						{
 							// function is not yet defined, define it
-							this.parentSegment.Parent.Disassemble((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value, null);
+							this.parentSegment.ParentProgram.Disassemble((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value, null);
 						}
 						break;
 
@@ -1282,8 +1289,9 @@ namespace Disassembler
 		public void WriteAsmCS(StreamWriter writer, int tabLevel, int verbosity)
 		{
 			bool retInstruction = false;
+
 			writer.WriteLine();
-			writer.Write($"{GetTabs(tabLevel)}public void {this.Name}(");
+			writer.Write($"{GetTabs(tabLevel)}public {this.returnValue.ValueType.CSDeclaration} {this.Name}(");
 			
 			ILVariable[] parameters = this.localParameters.Values.ToArray();
 			Array.Sort(parameters, (item1, item2) => item1.Offset.CompareTo(item2.Offset));
@@ -1292,7 +1300,7 @@ namespace Disassembler
 			{
 				if (k > 0)
 					writer.Write(", ");
-				writer.Write(parameters[k].ToCSDeclarationString());
+				writer.Write(parameters[k].CSDeclaration);
 			}
 
 			writer.WriteLine(")");
@@ -1311,7 +1319,7 @@ namespace Disassembler
 
 				if (verbosity > 0)
 				{
-					writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oCPU.Log.EnterBlock(\"'{this.Name}'({this.callType.ToString()}) at {this.parentSegment.ToString()}:0x{this.fnOffset:x}\");");
+					writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oCPU.Log.EnterBlock(\"'{this.Name}'({this.callType.ToString()}) at {this.parentSegment.Name}:0x{this.fnOffset:x}\");");
 					writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oCPU.CS.UInt16 = 0x{this.parentSegment.Segment:x4}; // set this function segment");
 				}
 				else
@@ -1329,7 +1337,7 @@ namespace Disassembler
 
 					for (int k = 0; k < variables.Length; k++)
 					{
-						writer.WriteLine($"{GetTabs(tabLevel + 1)}{variables[k].ToCSDeclarationString()};");
+						writer.WriteLine($"{GetTabs(tabLevel + 1)}{variables[k].CSDeclaration};");
 					}
 				}
 
@@ -1547,14 +1555,7 @@ namespace Disassembler
 							parameter = instruction.Parameters[1];
 							writer.WriteLine($"{GetTabs(tabLevel + 1)}// LEA");
 							writer.Write($"{GetTabs(tabLevel + 1)}{instruction.Parameters[0].ToDestinationCSTextMZ(instruction.OperandSize, parameter.ToCSTextMZ(instruction.OperandSize))}");
-							if (parameter.ReferenceType != CPUParameterReferenceEnum.None)
-							{
-								writer.WriteLine(" // {0}", parameter.ReferenceType.ToString());
-							}
-							else
-							{
-								writer.WriteLine();
-							}
+							writer.WriteLine();
 							break;
 
 						case CPUInstructionEnum.LODS:
@@ -1573,14 +1574,7 @@ namespace Disassembler
 							parameter = instruction.Parameters[1];
 							writer.Write($"{GetTabs(tabLevel + 1)}");
 							writer.Write(instruction.Parameters[0].ToDestinationCSTextMZ(instruction.OperandSize, parameter.ToSourceCSTextMZ(instruction.OperandSize)));
-							if (parameter.ReferenceType != CPUParameterReferenceEnum.None)
-							{
-								writer.WriteLine(" // {0}", parameter.ReferenceType.ToString());
-							}
-							else
-							{
-								writer.WriteLine();
-							}
+							writer.WriteLine();
 							break;
 
 						case CPUInstructionEnum.MOVS:
@@ -1643,14 +1637,7 @@ namespace Disassembler
 						case CPUInstructionEnum.PUSH:
 							parameter = instruction.Parameters[0];
 							writer.Write($"{GetTabs(tabLevel + 1)}this.oCPU.PUSH{instruction.OperandSize.ToString()}({parameter.ToSourceCSTextMZ(instruction.OperandSize)});");
-							if (parameter.ReferenceType != CPUParameterReferenceEnum.None)
-							{
-								writer.WriteLine(" // {0}", parameter.ReferenceType.ToString());
-							}
-							else
-							{
-								writer.WriteLine();
-							}
+							writer.WriteLine();
 							break;
 
 						case CPUInstructionEnum.PUSHA:
@@ -1783,7 +1770,7 @@ namespace Disassembler
 
 								if (instructionIndex < 0)
 								{
-									throw new Exception($"Can't find instruction in function {this.parentSegment.ToString()}.{this.Name} at offset 0x{parameter.Displacement:x4}");
+									throw new Exception($"Can't find instruction in function {this.parentSegment.Name}.{this.Name} at offset 0x{parameter.Displacement:x4}");
 								}
 								else
 								{
@@ -1800,7 +1787,7 @@ namespace Disassembler
 
 							if (instructionIndex < 0)
 							{
-								throw new Exception($"Can't find instruction in function {this.parentSegment.ToString()}.{this.Name} at offset 0x{uiOffset:x4}");
+								throw new Exception($"Can't find instruction in function {this.parentSegment.Name}.{this.Name} at offset 0x{uiOffset:x4}");
 							}
 							else
 							{
@@ -1815,7 +1802,7 @@ namespace Disassembler
 
 							if (instructionIndex < 0)
 							{
-								throw new Exception($"Can't find instruction in function {this.parentSegment.ToString()}.{this.Name} at offset 0x{uiOffset:x4}");
+								throw new Exception($"Can't find instruction in function {this.parentSegment.Name}.{this.Name} at offset 0x{uiOffset:x4}");
 							}
 							else
 							{
@@ -1829,7 +1816,7 @@ namespace Disassembler
 
 							if (instructionIndex < 0)
 							{
-								throw new Exception($"Can't find instruction in function {this.parentSegment.ToString()}.{this.Name} at offset 0x{uiOffset:x4}");
+								throw new Exception($"Can't find instruction in function {this.parentSegment.Name}.{this.Name} at offset 0x{uiOffset:x4}");
 							}
 							else
 							{
@@ -1846,7 +1833,7 @@ namespace Disassembler
 
 								if (instructionIndex < 0)
 								{
-									throw new Exception($"Can't find instruction in function {this.parentSegment.ToString()}.{this.Name} at offset 0x{uiOffset:x4}");
+									throw new Exception($"Can't find instruction in function {this.parentSegment.Name}.{this.Name} at offset 0x{uiOffset:x4}");
 								}
 								else
 								{
@@ -1880,7 +1867,7 @@ namespace Disassembler
 
 									if (instructionIndex < 0)
 									{
-										throw new Exception($"Can't find instruction in function {this.parentSegment.ToString()}.{this.Name} at 0x{parameter.Segment:x}:0x{parameter.Value:x}");
+										throw new Exception($"Can't find instruction in function {this.parentSegment.Name}.{this.Name} at 0x{parameter.Segment:x}:0x{parameter.Value:x}");
 									}
 									else
 									{
@@ -1912,7 +1899,7 @@ namespace Disassembler
 							}
 							else
 							{
-								function1 = this.parentSegment.Parent.FindFunction(0, instruction.Segment, (ushort)parameter.Value);
+								function1 = this.parentSegment.ParentProgram.FindFunction(0, instruction.Segment, (ushort)parameter.Value);
 
 								if (function1 != null)
 								{
@@ -1922,7 +1909,7 @@ namespace Disassembler
 										Console.WriteLine($"Function '{function1.Name}' doesn't support near return");
 									}
 
-									if (this.parentSegment.Segment != function1.Segment.Segment)
+									if (this.parentSegment.Segment != function1.ParentSegment.Segment)
 									{
 										if ((this.callType & ProgramFunctionTypeEnum.CAPI) == ProgramFunctionTypeEnum.CAPI)
 										{
@@ -1930,7 +1917,7 @@ namespace Disassembler
 										}
 										else
 										{
-											writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oParent.{function1.Segment.ToString()}.{function1.Name}();");
+											writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oParent.{function1.ParentSegment.Name}.{function1.Name}();");
 										}
 									}
 									else
@@ -1946,7 +1933,7 @@ namespace Disassembler
 											}
 											else
 											{
-												writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oParent.{function1.Segment.ToString()}.{function1.Name}();");
+												writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oParent.{function1.ParentSegment.Name}.{function1.Name}();");
 											}
 										}
 										else
@@ -1980,7 +1967,7 @@ namespace Disassembler
 
 							if (parameter.Type == CPUParameterTypeEnum.SegmentOffset)
 							{
-								function1 = this.parentSegment.Parent.FindFunction(0, parameter.Segment, (ushort)parameter.Value);
+								function1 = this.parentSegment.ParentProgram.FindFunction(0, parameter.Segment, (ushort)parameter.Value);
 								if (function1 != null)
 								{
 									if ((function1.CallType & ProgramFunctionTypeEnum.Far) != ProgramFunctionTypeEnum.Far &&
@@ -1989,7 +1976,7 @@ namespace Disassembler
 										Console.WriteLine($"Function '{function1.Name}' doesn't support far return");
 									}
 
-									if (this.parentSegment.Segment != function1.Segment.Segment)
+									if (this.parentSegment.Segment != function1.ParentSegment.Segment)
 									{
 										if ((function1.CallType & ProgramFunctionTypeEnum.CAPI) == ProgramFunctionTypeEnum.CAPI)
 										{
@@ -1997,7 +1984,7 @@ namespace Disassembler
 										}
 										else
 										{
-											writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oParent.{function1.Segment.ToString()}.{function1.Name}();");
+											writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oParent.{function1.ParentSegment.Name}.{function1.Name}();");
 										}
 									}
 									else
@@ -2013,7 +2000,7 @@ namespace Disassembler
 											}
 											else
 											{
-												writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oParent.{function1.Segment.ToString()}.{function1.Name}();");
+												writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oParent.{function1.ParentSegment.Name}.{function1.Name}();");
 											}
 										}
 										else
@@ -2050,7 +2037,7 @@ namespace Disassembler
 								writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oCPU.PushUInt32(0); // stack management - push return segment, offset");
 							}
 
-							function1 = this.parentSegment.Parent.FindFunction((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value);
+							function1 = this.parentSegment.ParentProgram.FindFunction((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value);
 							if (function1 != null)
 							{
 								if ((function1.CallType & ProgramFunctionTypeEnum.Far) != ProgramFunctionTypeEnum.Far && (function1.CallType & ProgramFunctionTypeEnum.Near) == ProgramFunctionTypeEnum.Near)
@@ -2058,7 +2045,7 @@ namespace Disassembler
 									Console.WriteLine($"Function '{function1.Name}' doesn't support far return");
 								}
 
-								if (this.parentSegment != function1.Segment)
+								if (this.parentSegment != function1.ParentSegment)
 								{
 									if ((function1.CallType & ProgramFunctionTypeEnum.CAPI) == ProgramFunctionTypeEnum.CAPI)
 									{
@@ -2066,7 +2053,7 @@ namespace Disassembler
 									}
 									else
 									{
-										writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oParent.{function1.Segment.ToString()}.{function1.Name}();");
+										writer.WriteLine($"{GetTabs(tabLevel + 1)}this.oParent.{function1.ParentSegment.Name}.{function1.Name}();");
 									}
 								}
 								else
@@ -2134,7 +2121,7 @@ namespace Disassembler
 						default:
 							//throw new Exception($"Unexpected instruction type: {instruction.InstructionType}");
 							Console.WriteLine($"Unexpected instruction type '{instruction.InstructionType}' " +
-								$"in function {this.parentSegment.ToString()}.{this.Name} at offset 0x{instruction.Offset:x4}");
+								$"in function {this.parentSegment.Name}.{this.Name} at offset 0x{instruction.Offset:x4}");
 							break;
 					}
 				}
@@ -2189,7 +2176,7 @@ namespace Disassembler
 			return tabs.ToString();
 		}
 
-		public ProgramSegment Segment { get => this.parentSegment; }
+		public ProgramSegment ParentSegment { get => this.parentSegment; }
 
 		public int Ordinal { get => this.ordinal; set => this.ordinal = value; }
 
@@ -2233,38 +2220,20 @@ namespace Disassembler
 				{
 					ILVariable parameter = this.localParameters[i].Value;
 
-					switch (parameter.Type)
-					{
-						case ILValueTypeEnum.UInt8:
-						case ILValueTypeEnum.Int8:
-							parameterSize += 2;
-							break;
-
-						case ILValueTypeEnum.UInt16:
-						case ILValueTypeEnum.Int16:
-						case ILValueTypeEnum.Ptr16:
-							parameterSize += 2;
-							break;
-
-						case ILValueTypeEnum.UInt32:
-						case ILValueTypeEnum.Int32:
-						case ILValueTypeEnum.Ptr32:
-							parameterSize += 4;
-							break;
-					}
+					parameterSize += parameter.ValueType.SizeOf;
 				}
 
 				return parameterSize;
 			}
 		}
 
-		public BDictionary<int, ILVariable> Variables { get => this.localVariables; }
+		public BDictionary<int, ILVariable> LocalVariables { get => this.localVariables; }
 
 		public int LocalVariableSize { get => this.localVariableSize; set => this.localVariableSize = value; }
 
 		public int LocalVariablePosition { get => this.localVariablePosition; set => this.localVariablePosition = value; }
 
-		public CPUParameterSizeEnum ReturnType { get => this.returnType; set => this.returnType = value; }
+		public ILVariable ReturnValue { get => this.returnValue; set => this.returnValue = value; }
 
 		public int LocalStackSize { get => this.stackSize; }
 

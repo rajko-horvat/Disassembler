@@ -6,11 +6,12 @@ namespace Disassembler
 {
 	public class ProgramSegment
 	{
-		private MainProgram parent;
+		private MainProgram parentProgram;
 
 		private ProgramSegmentTypeEnum programSegmentType = ProgramSegmentTypeEnum.None;
 		private uint segment;
 		private int ordinal = -1;
+		private string? name = null;
 		private BDictionary<int, ILVariable> globalVariables = new();
 		private BDictionary<ushort, ProgramFunction> functions = new();
 
@@ -19,7 +20,7 @@ namespace Disassembler
 
 		public ProgramSegment(MainProgram program, ProgramSegmentTypeEnum programSegmentType, uint segment)
 		{
-			this.parent = program;
+			this.parentProgram = program;
 			this.programSegmentType = programSegmentType;
 
 			if (segment < 0)
@@ -32,21 +33,21 @@ namespace Disassembler
 
 		public ILVariable GetOrDefineGlobalVariable(CPUParameterSizeEnum type, int offset)
 		{
-			ILValueTypeEnum ILType = ILVariable.FromCPUParameterSizeEnum(type);
+			ILValueType valueType = this.parentProgram.FromCPUParameterSizeEnum(type);
 
 			if (this.globalVariables.ContainsKey(offset))
 			{
 				ILVariable variable = this.globalVariables.GetValueByKey(offset);
-				if (variable.Type != ILType)
+				if (variable.ValueType != valueType)
 				{
-					Console.WriteLine($"Variable type at offset 0x{((uint)offset):x} type '{variable.Type}' doesnt match requested type '{ILType}'");
+					Console.WriteLine($"Variable type at offset 0x{((uint)offset):x} type '{variable.ValueType}' doesnt match requested type '{valueType}'");
 				}
 
 				return variable;
 			}
 			else
 			{
-				ILVariable variable = new ILVariable(null, ILVariableScopeEnum.Global, ILType, offset);
+				ILVariable variable = new ILVariable(null, ILVariableScopeEnum.Global, valueType, offset);
 
 				this.globalVariables.Add(offset, variable);
 
@@ -56,12 +57,12 @@ namespace Disassembler
 
 		public void WriteAsmCS(string path, int verbosity)
 		{
-			StreamWriter writer = new StreamWriter($"{path}\\{this.ToString()}Asm.cs");
+			StreamWriter writer = new StreamWriter($"{path}\\{this.Name}Asm.cs");
 
 			if (this.functions.Count > 0)
 			{
 				ProgramFunction[] functions = this.functions.Values.ToArray();
-				string className = this.ToString();
+				string className = this.Name;
 
 				// sort by offsets
 				Array.Sort(functions, (item1, item2) => item1.FunctionOffset.CompareTo(item2.FunctionOffset));
@@ -92,7 +93,7 @@ namespace Disassembler
 
 					for (int k = 0; k < variables.Length; k++)
 					{
-						writer.WriteLine($"\t\t{variables[k].ToCSDeclarationString()};");
+						writer.WriteLine($"\t\t{variables[k].CSDeclaration};");
 					}
 				}
 
@@ -109,9 +110,9 @@ namespace Disassembler
 			writer.Close();
 		}
 
-		public MainProgram Parent
+		public MainProgram ParentProgram
 		{
-			get => this.parent;
+			get => this.parentProgram;
 		}
 
 		public ProgramSegmentTypeEnum ProgramSegmentType
@@ -139,6 +140,40 @@ namespace Disassembler
 		{
 			get => this.ordinal;
 			set => this.ordinal = value;
+		}
+
+		public string Name
+		{
+			get
+			{
+				if (this.name != null)
+				{
+					return this.name;
+				}
+
+				if (this.ordinal == -1)
+				{
+					if (MainProgram.ToCPUOverlay(this.segment) != 0)
+					{
+						return $"Ovr_{MainProgram.ToCPUOverlay(this.segment):x4}";
+					}
+					else
+					{
+						return $"Seg_{this.segment:x4}";
+					}
+				}
+
+				if (MainProgram.ToCPUOverlay(this.segment) != 0)
+				{
+					return $"Ovr{this.ordinal}";
+				}
+				else
+				{
+					return $"Seg{this.ordinal}";
+				}
+			}
+
+			set => this.name = value;
 		}
 
 		public BDictionary<int, ILVariable> GlobalVariables
@@ -174,26 +209,7 @@ namespace Disassembler
 
 		public override string ToString()
 		{
-			if (this.ordinal == -1)
-			{
-				if (MainProgram.ToCPUOverlay(this.segment) != 0)
-				{
-					return $"Ovr_{MainProgram.ToCPUOverlay(this.segment):x4}";
-				}
-				else
-				{
-					return $"Seg_{this.segment:x4}";
-				}
-			}
-
-			if (MainProgram.ToCPUOverlay(this.segment) != 0)
-			{
-				return $"Ovr{this.ordinal}";
-			}
-			else
-			{
-				return $"Seg{this.ordinal}";
-			}
+			return this.Name;
 		}
 
 		public override int GetHashCode()

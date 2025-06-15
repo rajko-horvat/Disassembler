@@ -7,15 +7,27 @@ namespace Disassembler
 {
 	public class MainProgram
 	{
-		private MZExecutable oExecutable;
-		private List<ModuleMatch> aLibraryMatches;
-		private BDictionary<uint, ProgramSegment> programSegments = new();
+		// base types
+		private ILValueType voidValueType = ILValueType.Void;
+		private ILValueType charValueType = new("char", ILBaseValueTypeEnum.Int8);
+		private ILValueType unsignedCharValueType = new("unsigned char", ILBaseValueTypeEnum.UInt8);
+		private ILValueType intValueType = new("int", ILBaseValueTypeEnum.Int16);
+		private ILValueType unsignedIntValueType = new("unsigned int", ILBaseValueTypeEnum.UInt16);
+		private ILValueType longValueType = new("long", ILBaseValueTypeEnum.Int32);
+		private ILValueType unsignedLongValueType = new("unsigned long", ILBaseValueTypeEnum.UInt32);
+		private ILValueType stringValueType = new("char*", ILBaseValueTypeEnum.Ptr16, new ILValueType(ILBaseValueTypeEnum.Int8));
+
+		private MZExecutable executable;
+		private List<ModuleMatch> libraryMatches;
+		private BDictionary<uint, ProgramSegment> segments = new();
 		private uint defaultDS = 0;
+		private BDictionary<string, APIFunctionDefinition> apiFunctions = new();
+		private BDictionary<string, ILValueType> customValueTypes = new();
 
 		public MainProgram(MZExecutable executable, List<ModuleMatch> matches)
 		{
-			this.oExecutable = executable;
-			this.aLibraryMatches = matches;
+			this.executable = executable;
+			this.libraryMatches = matches;
 
 			//MainProgramFunction function = new MainProgramFunction(this, MainProgramFunctionCallTypeEnum.Cdecl, "DivisionByZero", 
 			//	new List<Variable>(), CPUParameterSizeEnum.Undefined, 0, 0, 0);
@@ -26,19 +38,20 @@ namespace Disassembler
 			uint absoluteSegment = ToAbsoluteSegment(overlay, segment);
 
 			// look into function list
-			if (this.programSegments.ContainsKey(absoluteSegment) && this.programSegments.GetValueByKey(absoluteSegment).Functions.ContainsKey(offset))
+			if (this.segments.ContainsKey(absoluteSegment) && this.segments.GetValueByKey(absoluteSegment).Functions.ContainsKey(offset))
 			{
-				return this.programSegments.GetValueByKey(absoluteSegment).Functions.GetValueByKey(offset);
+				return this.segments.GetValueByKey(absoluteSegment).Functions.GetValueByKey(offset);
 			}
 
+			// try to find API function
 			if (overlay == 0)
 			{
 				uint absoluteAddress = MainProgram.ToLinearAddress(segment, offset);
 
 				// look into library matches
-				for (int i = 0; i < this.aLibraryMatches.Count; i++)
+				for (int i = 0; i < this.libraryMatches.Count; i++)
 				{
-					ModuleMatch match = this.aLibraryMatches[i];
+					ModuleMatch match = this.libraryMatches[i];
 
 					if (absoluteAddress >= match.LinearAddress && absoluteAddress < match.LinearAddress + match.Length)
 					{
@@ -63,7 +76,31 @@ namespace Disassembler
 
 									fnSegment.Functions.Add(offset, function);
 
-									Console.WriteLine($"Adding undefined API function {function.Segment.ToString()}.{function.Name}()");
+									if (this.apiFunctions.ContainsKey(sName))
+									{
+										APIFunctionDefinition apiFunction = this.apiFunctions.GetValueByKey(sName);
+
+										function.Parameters.Clear();
+										// !!! Will have to introduce program memory model (Small, Medium, Large...)
+										int parameterOffset = 6; // (function.CallType & ProgramFunctionTypeEnum.Far) == ProgramFunctionTypeEnum.Far ? 6 : 4;
+
+										for (int l = 0; l < apiFunction.Parameters.Length; l++)
+										{
+											ILVariable parameter = apiFunction.Parameters[l];
+
+											parameter.Offset = parameterOffset;
+											function.Parameters.Add(parameterOffset, parameter);
+
+											// minimum stack parameter size is 2
+											parameterOffset += Math.Max(2, parameter.ValueType.SizeOf);
+										}
+
+										function.ReturnValue = apiFunction.ReturnValue;
+									}
+									else
+									{
+										Console.WriteLine($"Adding undefined API function {function.ParentSegment.Name}.{function.Name}()");
+									}
 
 									return function;
 								}
@@ -80,15 +117,15 @@ namespace Disassembler
 		{
 			uint absoluteSegment = ToAbsoluteSegment(overlay, segment);
 
-			if (this.programSegments.ContainsKey(absoluteSegment))
+			if (this.segments.ContainsKey(absoluteSegment))
 			{
-				return this.programSegments.GetValueByKey(absoluteSegment);
+				return this.segments.GetValueByKey(absoluteSegment);
 			}
 			else
 			{
 				ProgramSegment newSegment = new ProgramSegment(this, absoluteSegment);
 
-				this.programSegments.Add(absoluteSegment, newSegment);
+				this.segments.Add(absoluteSegment, newSegment);
 
 				return newSegment;
 			}
@@ -113,7 +150,7 @@ namespace Disassembler
 
 		public void DisassembleOverlay()
 		{
-			MemoryStream reader = new MemoryStream(this.oExecutable.Data);
+			MemoryStream reader = new MemoryStream(this.executable.Data);
 			
 			reader.Position = 0x30;
 
@@ -138,11 +175,63 @@ namespace Disassembler
 			Console.WriteLine("--- End overlay offsets");
 		}
 
+		public void AssignOrdinals()
+		{
+			// enumerate Main segments and their functions
+			uint[] segmentOffsets = this.segments.Keys.ToArray();
+			int segmentOrdinal = 0;
+			int overlayOrdinal = 0;
+
+			Array.Sort(segmentOffsets);
+
+
+			for (int i = 0; i < segmentOffsets.Length; i++)
+			{
+				ProgramSegment segment = this.segments.GetValueByKey(segmentOffsets[i]);
+
+				// differentiate between overlay and segments from main exe
+				if (segment.CPUOverlay > 0)
+				{
+					segment.Ordinal = overlayOrdinal++;
+				}
+				else
+				{
+					segment.Ordinal = segmentOrdinal++;
+				}
+
+				ushort[] functionOffsets = segment.Functions.Keys.ToArray();
+
+				Array.Sort(functionOffsets);
+
+				for (int j = 0; j < functionOffsets.Length; j++)
+				{
+					ProgramFunction function = segment.Functions.GetValueByKey(functionOffsets[j]);
+
+					function.Ordinal = j + 1;
+				}
+			}
+
+			for (int i = 0; i < this.segments.Count; i++)
+			{
+				ProgramSegment segment = this.segments[i].Value;
+
+				for (int j = 0; j < segment.Functions.Count; j++)
+				{
+					ProgramFunction function = segment.Functions[j].Value;
+
+					if (function.FlowGraph != null)
+					{
+						function.FlowGraph.TranslateFunction();
+					}
+				}
+			}
+		}
+
 		public MZExecutable Executable
 		{
 			get
 			{
-				return this.oExecutable;
+				return this.executable;
 			}
 		}
 
@@ -150,19 +239,59 @@ namespace Disassembler
 		{
 			get
 			{
-				return this.aLibraryMatches;
+				return this.libraryMatches;
 			}
 		}
 
 		public BDictionary<uint, ProgramSegment> Segments
 		{
-			get => this.programSegments;
+			get => this.segments;
 		}
+
+		public BDictionary<string, APIFunctionDefinition> APIFunctions { get => this.apiFunctions; }
 
 		public uint DefaultDS
 		{
 			get => this.defaultDS;
 			set => this.defaultDS = value;
+		}
+
+		public ILValueType VoidValueType { get => this.voidValueType; }
+
+		public ILValueType CharValueType { get => this.charValueType; }
+
+		public ILValueType UnsignedCharValueType { get => this.unsignedCharValueType; }
+
+		public ILValueType IntValueType { get => this.intValueType; }
+
+		public ILValueType UnsignedIntValueType { get => this.unsignedIntValueType; }
+
+		public ILValueType LongValueType { get => this.longValueType; }
+
+		public ILValueType UnsignedLongValueType { get => this.unsignedLongValueType; }
+
+		public ILValueType StringValueType { get => this.stringValueType; }
+
+		public BDictionary<string, ILValueType> CustomValueTypes { get => this.customValueTypes; }
+
+		public ILValueType FromCPUParameterSizeEnum(CPUParameterSizeEnum parameterType)
+		{
+			switch (parameterType)
+			{
+				case CPUParameterSizeEnum.UInt8:
+					return this.UnsignedCharValueType;
+
+				case CPUParameterSizeEnum.UInt16:
+					// the default is Int16
+					return this.intValueType;
+
+				case CPUParameterSizeEnum.UInt32:
+					// the default is Int32
+					return this.longValueType;
+
+				default:
+					return ILValueType.Void;
+			}
 		}
 
 		public static uint ToAbsoluteSegment(ushort overlay, ushort segment)

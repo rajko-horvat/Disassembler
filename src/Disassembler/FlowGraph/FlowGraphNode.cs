@@ -205,7 +205,7 @@ namespace Disassembler
 		{
 			if (this.nodeType != FlowGraphNodeTypeEnum.Start && this.nodeType != FlowGraphNodeTypeEnum.End)
 			{
-				ProgramFunction parentFunction = this.flowGraph.Parent;
+				ProgramFunction parentFunction = this.flowGraph.ParentFunction;
 				CPUInstruction instruction;
 
 				int instructionCount = this.asmInstructions.Count;
@@ -230,7 +230,8 @@ namespace Disassembler
 								parameter0.Value == instruction.Parameters[1].Value)
 							{
 								register = parameter0.RegisterValue;
-								parentFunction.Variables.Add(parentFunction.LocalVariablePosition, new ILVariable(parentFunction, ILValueTypeEnum.Int16, parentFunction.LocalVariablePosition));
+								parentFunction.LocalVariables.Add(parentFunction.LocalVariablePosition, new ILVariable(parentFunction, 
+									this.flowGraph.ParentFunction.ParentSegment.ParentProgram.IntValueType, parentFunction.LocalVariablePosition));
 								variable = new ILLocalVariableReference(parentFunction, parentFunction.LocalVariablePosition);
 
 								if (localRegisters.ContainsKey(register))
@@ -242,7 +243,7 @@ namespace Disassembler
 									localRegisters.Add(register, variable);
 								}
 
-								this.ilInstructions.Add(new ILAssignment(variable, new ILImmediateValue(parameter0.Size, 0)));
+								this.ilInstructions.Add(new ILAssignment(variable, new ILImmediateValue(parentFunction.ParentSegment.ParentProgram.FromCPUParameterSizeEnum(parameter0.Size), 0)));
 
 								parentFunction.LocalVariablePosition += 2;
 							}
@@ -292,7 +293,8 @@ namespace Disassembler
 							{
 								case CPUParameterTypeEnum.Register:
 									register = parameter0.RegisterValue;
-									parentFunction.Variables.Add(parentFunction.LocalVariablePosition, new ILVariable(parentFunction, ILValueTypeEnum.Int16, parentFunction.LocalVariablePosition));
+									parentFunction.LocalVariables.Add(parentFunction.LocalVariablePosition, new ILVariable(parentFunction, 
+										this.flowGraph.ParentFunction.ParentSegment.ParentProgram.IntValueType, parentFunction.LocalVariablePosition));
 									variable = new ILLocalVariableReference(parentFunction, parentFunction.LocalVariablePosition);
 
 									if (localRegisters.ContainsKey(register))
@@ -323,7 +325,7 @@ namespace Disassembler
 
 							if (parameter0.Type == CPUParameterTypeEnum.SegmentOffset)
 							{
-								function = parentFunction.Segment.Parent.FindFunction(0, parameter0.Segment, (ushort)parameter0.Value);
+								function = parentFunction.ParentSegment.ParentProgram.FindFunction(0, parameter0.Segment, (ushort)parameter0.Value);
 
 								if (function != null)
 								{
@@ -363,7 +365,7 @@ namespace Disassembler
 											}
 											else
 											{
-												throw new Exception($"The function '{function.Segment.ToString()}.{function.Name}' " +
+												throw new Exception($"The function '{function.ParentSegment.Name}.{function.Name}' " +
 													$"accepts {function.Parameters.Count} parameters, but {(instruction.Parameters[1].Value / 2)} parameters passed");
 											}
 										}
@@ -399,7 +401,7 @@ namespace Disassembler
 			BDictionary<CPURegisterEnum, ILExpression> localRegisters, CPUParameter parameter)
 		{
 
-			ProgramFunction parentFunction = this.flowGraph.Parent;
+			ProgramFunction parentFunction = this.flowGraph.ParentFunction;
 
 			switch (parameter.Type)
 			{
@@ -407,13 +409,13 @@ namespace Disassembler
 					switch (parameter.Size)
 					{
 						case CPUParameterSizeEnum.UInt8:
-							return new ILImmediateValue(ILValueTypeEnum.UInt8, parameter.Value);
+							return new ILImmediateValue(this.flowGraph.ParentFunction.ParentSegment.ParentProgram.FromCPUParameterSizeEnum(parameter.Size), parameter.Value);
 
 						case CPUParameterSizeEnum.UInt16:
-							return new ILImmediateValue(ILValueTypeEnum.UInt16, parameter.Value);
+							return new ILImmediateValue(this.flowGraph.ParentFunction.ParentSegment.ParentProgram.FromCPUParameterSizeEnum(parameter.Size), parameter.Value);
 
 						case CPUParameterSizeEnum.UInt32:
-							return new ILImmediateValue(ILValueTypeEnum.UInt32, parameter.Value);
+							return new ILImmediateValue(this.flowGraph.ParentFunction.ParentSegment.ParentProgram.FromCPUParameterSizeEnum(parameter.Size), parameter.Value);
 
 						default:
 							throw new Exception($"Parameter size {parameter.Size} not implemented");
@@ -490,7 +492,7 @@ namespace Disassembler
 							throw new Exception($"The segment '{parameter.DataSegment}' is not defined");
 						}
 
-						ProgramSegment segment = parentFunction.Segment.Parent.FindOrCreateSegment(parentFunction.Segment.CPUOverlay, (ushort)localSegments.GetValueByKey(parameter.DataSegment));
+						ProgramSegment segment = parentFunction.ParentSegment.ParentProgram.FindOrCreateSegment(parentFunction.ParentSegment.CPUOverlay, (ushort)localSegments.GetValueByKey(parameter.DataSegment));
 
 						switch (parameter.Value)
 						{
@@ -549,6 +551,29 @@ namespace Disassembler
 				default:
 					throw new Exception($"Parameter type '{parameter.Type}' not implemented");
 			}
+		}
+
+		public bool Equals(FlowGraphNode node1)
+		{
+			bool equal = true;
+
+			if (this.asmInstructions.Count == node1.asmInstructions.Count)
+			{
+				for (int i = 0; i < this.asmInstructions.Count; i++)
+				{
+					if (!this.asmInstructions[i].Equals(node1.asmInstructions[i]))
+					{
+						equal = false;
+						break;
+					}
+				}
+			}
+			else
+			{
+				equal = false;
+			}
+
+			return equal;
 		}
 	}
 }

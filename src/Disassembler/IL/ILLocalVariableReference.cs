@@ -19,22 +19,22 @@ namespace Disassembler
 
 		public override string ToCSString()
 		{
-			if (!this.parent.Variables.ContainsKey(this.offset))
+			if (!this.parent.LocalVariables.ContainsKey(this.offset))
 			{
 				throw new Exception("Can't find referenced function local variable");
 			}
 
-			return this.parent.Variables.GetValueByKey(this.offset).ToCSString();
+			return this.parent.LocalVariables.GetValueByKey(this.offset).ToCSString();
 		}
 
 		public string ToCSDeclarationString()
 		{
-			if (!this.parent.Variables.ContainsKey(this.offset))
+			if (!this.parent.LocalVariables.ContainsKey(this.offset))
 			{
 				throw new Exception("Can't find referenced function local variable");
 			}
 
-			return this.parent.Variables.GetValueByKey(this.offset).ToCSDeclarationString();
+			return this.parent.LocalVariables.GetValueByKey(this.offset).CSDeclaration;
 		}
 
 		public ProgramFunction Parent

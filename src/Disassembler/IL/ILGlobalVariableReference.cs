@@ -24,7 +24,7 @@ namespace Disassembler
 				throw new Exception("Can't find referenced global variable");
 			}
 
-			return $"this.oParent.{this.parent.ToString()}.{this.parent.GlobalVariables.GetValueByKey(this.offset).ToCSString()}";
+			return $"this.oParent.{this.parent.Name}.{this.parent.GlobalVariables.GetValueByKey(this.offset).ToCSString()}";
 		}
 
 		public string ToCSDeclarationString()
@@ -34,7 +34,7 @@ namespace Disassembler
 				throw new Exception("Can't find referenced global variable");
 			}
 
-			return this.parent.GlobalVariables.GetValueByKey(this.offset).ToCSDeclarationString();
+			return this.parent.GlobalVariables.GetValueByKey(this.offset).CSDeclaration;
 		}
 
 		public ProgramSegment Parent

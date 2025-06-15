@@ -1391,5 +1391,31 @@ namespace Disassembler.CPU
 		{
 			return i1.LinearAddress.CompareTo(i2.LinearAddress);
 		}
+
+		public bool Equals(CPUInstruction instruction1)
+		{
+			bool equals = true;
+
+			if (this.eCPUType == instruction1.eCPUType && this.eInstruction == instruction1.eInstruction && 
+				this.eOperandSize == instruction1.eOperandSize && this.eAddressSize == instruction1.eAddressSize &&
+				this.eRepPrefix == instruction1.eRepPrefix &&
+				this.aParameters.Count == instruction1.aParameters.Count)
+			{
+				for (int i = 0; i < this.aParameters.Count; i++)
+				{
+					if (!this.aParameters[i].Equals(instruction1.aParameters[i]))
+					{
+						equals = false;
+						break;
+					}
+				}
+			}
+			else
+			{
+				equals = false;
+			}
+
+			return equals;
+		}
 	}
 }
