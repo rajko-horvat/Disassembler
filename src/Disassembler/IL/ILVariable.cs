@@ -5,14 +5,15 @@ namespace Disassembler
 {
 	public class ILVariable : ILExpression
 	{
+		private ProgramFunction? parent;
 		private string? name = null;
 		private ILVariableScopeEnum scope = ILVariableScopeEnum.LocalVariable;
 		private ILValueType valueType = ILValueType.Void;
 		private int arraySize = 0;
-		private int valueTypeConfidence = 0;
 		private int offset = 0;
-		private ProgramFunction? parent;
+		private int valueTypeConfidence = 0;
 		private object? initialValue = null;
+		private bool variableArguments = false;
 
 		public ILVariable(ProgramFunction? parent, ILValueType type, int offset) : this(parent, ILVariableScopeEnum.LocalVariable, type, offset, 0) { }
 
@@ -22,9 +23,15 @@ namespace Disassembler
 
 		public ILVariable(string name, ILVariableScopeEnum scope, ILValueType type, int offset, int valueTypeConfidence) : this(null, name, scope, type, offset, valueTypeConfidence) { }
 
+		public ILVariable(string name, ILVariableScopeEnum scope, ILValueType type, int offset, int valueTypeConfidence, bool variableArguments) : 
+			this(null, name, scope, type, offset, valueTypeConfidence, variableArguments) { }
+
 		public ILVariable(ProgramFunction? parent, ILVariableScopeEnum scope, ILValueType type, int offset, int valueTypeConfidence) : this(parent, null, scope, type, offset, valueTypeConfidence) { }
 
-		public ILVariable(ProgramFunction? parent, string? name, ILVariableScopeEnum scope, ILValueType valueType, int offset, int valueTypeConfidence)
+		public ILVariable(ProgramFunction? parent, string? name, ILVariableScopeEnum scope, ILValueType valueType, int offset, int valueTypeConfidence) :
+			this(parent, name, scope, valueType, offset, valueTypeConfidence, false) { }
+
+		public ILVariable(ProgramFunction? parent, string? name, ILVariableScopeEnum scope, ILValueType valueType, int offset, int valueTypeConfidence, bool variableArguments)
 		{
 			this.parent = parent;
 			this.name = name;
@@ -32,6 +39,7 @@ namespace Disassembler
 			this.valueType = valueType;
 			this.offset = offset;
 			this.valueTypeConfidence = valueTypeConfidence;
+			this.variableArguments = variableArguments;
 		}
 
 		public string CSDeclaration
@@ -41,7 +49,7 @@ namespace Disassembler
 				switch (this.scope)
 				{
 					case ILVariableScopeEnum.Global:
-						return $"public {this.valueType.CSDeclaration} {this.Name} {this.CSInitialization}";
+						return $"public {this.valueType.CSDeclaration} {this.Name}{this.CSInitialization}";
 
 					case ILVariableScopeEnum.LocalParameter:
 						return $"{this.valueType.CSDeclaration} {this.Name}";
@@ -161,5 +169,7 @@ namespace Disassembler
 		public int Offset { get => this.offset; set => this.offset = value; }
 
 		public object? InitialValue { get => this.initialValue; set => this.initialValue = value; }
+
+		public bool VariableArguments { get => this.variableArguments;  set => this.variableArguments = value; }
 	}
 }

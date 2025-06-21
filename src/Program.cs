@@ -117,7 +117,7 @@ internal class Program
 		MainProgram mainProgram = new MainProgram(mainEXE, libraryMatches);
 		mainProgram.DefaultDS = newDS;
 
-		// add API functions
+		#region MS C 5.1 API functions
 
 		// Word registers
 		ILValueType wordRegs = new("WORDREGS", ILBaseValueTypeEnum.Struct);
@@ -132,20 +132,20 @@ internal class Program
 
 		// Byte registers
 		ILValueType byteRegs = new("BYTEREGS", ILBaseValueTypeEnum.Struct);
-		wordRegs.MemberObjects.Add(new("al", ILBaseValueTypeEnum.UInt8));
-		wordRegs.MemberObjects.Add(new("ah", ILBaseValueTypeEnum.UInt8));
-		wordRegs.MemberObjects.Add(new("bl", ILBaseValueTypeEnum.UInt8));
-		wordRegs.MemberObjects.Add(new("bh", ILBaseValueTypeEnum.UInt8));
-		wordRegs.MemberObjects.Add(new("cl", ILBaseValueTypeEnum.UInt8));
-		wordRegs.MemberObjects.Add(new("ch", ILBaseValueTypeEnum.UInt8));
-		wordRegs.MemberObjects.Add(new("dl", ILBaseValueTypeEnum.UInt8));
-		wordRegs.MemberObjects.Add(new("dh", ILBaseValueTypeEnum.UInt8));
+		byteRegs.MemberObjects.Add(new("al", ILBaseValueTypeEnum.UInt8));
+		byteRegs.MemberObjects.Add(new("ah", ILBaseValueTypeEnum.UInt8));
+		byteRegs.MemberObjects.Add(new("bl", ILBaseValueTypeEnum.UInt8));
+		byteRegs.MemberObjects.Add(new("bh", ILBaseValueTypeEnum.UInt8));
+		byteRegs.MemberObjects.Add(new("cl", ILBaseValueTypeEnum.UInt8));
+		byteRegs.MemberObjects.Add(new("ch", ILBaseValueTypeEnum.UInt8));
+		byteRegs.MemberObjects.Add(new("dl", ILBaseValueTypeEnum.UInt8));
+		byteRegs.MemberObjects.Add(new("dh", ILBaseValueTypeEnum.UInt8));
 		mainProgram.CustomValueTypes.Add(byteRegs.TypeName, byteRegs);
 
 		// Registers union (Overlays the corresponding word and byte registers)
 		ILValueType regs = new("REGS", ILBaseValueTypeEnum.Union);
-		wordRegs.MemberObjects.Add(new("x", ILBaseValueTypeEnum.Struct, wordRegs));
-		wordRegs.MemberObjects.Add(new("h", ILBaseValueTypeEnum.Struct, byteRegs));
+		regs.MemberObjects.Add(new("x", ILBaseValueTypeEnum.Struct, wordRegs));
+		regs.MemberObjects.Add(new("h", ILBaseValueTypeEnum.Struct, byteRegs));
 		mainProgram.CustomValueTypes.Add(regs.TypeName, regs);
 
 		// Define FILE structure as a single pointer
@@ -155,18 +155,277 @@ internal class Program
 		ILValueType filePtr = new("FILE *", ILBaseValueTypeEnum.Ptr16, file);
 		mainProgram.CustomValueTypes.Add(filePtr.TypeName, filePtr);
 
-		// int _CDECL int86(int, union REGS *, union REGS *);
-		mainProgram.APIFunctions.Add("int86", new APIFunctionDefinition("int86", 
-			[new("intnum", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10),
-			new("inregs", ILVariableScopeEnum.LocalParameter, new ILValueType(ILBaseValueTypeEnum.Ptr16, regs), 8, 10),
-			new("outregs", ILVariableScopeEnum.LocalParameter, new ILValueType(ILBaseValueTypeEnum.Ptr16, regs), 10, 10)], 
-			new(ILVariableScopeEnum.LocalVariable, mainProgram.IntValueType, 0, 10)));
+		ILValueType diskinfo_t = new("diskinfo_t", ILBaseValueTypeEnum.Struct);
+		diskinfo_t.MemberObjects.Add(new("drive", ILBaseValueTypeEnum.UInt16));
+		diskinfo_t.MemberObjects.Add(new("head", ILBaseValueTypeEnum.UInt16));
+		diskinfo_t.MemberObjects.Add(new("track", ILBaseValueTypeEnum.UInt16));
+		diskinfo_t.MemberObjects.Add(new("sector", ILBaseValueTypeEnum.UInt16));
+		diskinfo_t.MemberObjects.Add(new("nsectors", ILBaseValueTypeEnum.UInt16));
+		diskinfo_t.MemberObjects.Add(new("buffer", ILBaseValueTypeEnum.Ptr32));
+		mainProgram.CustomValueTypes.Add(diskinfo_t.TypeName, diskinfo_t);
 
-		// FILE * _CDECL fopen(const char *, const char *);
-		mainProgram.APIFunctions.Add("fopen", new APIFunctionDefinition("fopen",
+		// int int86(int intnum, union _REGS * inregs, union _REGS * outregs );
+		mainProgram.APIFunctions.Add("int86", new APIFunctionDefinition("int86", ProgramFunctionOptionsEnum.Cdecl,
+			[new("intnum", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10),
+				new("inregs", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, regs), 8, 10),
+				new("outregs", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, regs), 10, 10)], 
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// int intdos(union REGS * inregs, union REGS * outregs);
+		mainProgram.APIFunctions.Add("intdos", new APIFunctionDefinition("intdos", ProgramFunctionOptionsEnum.Cdecl,
+			[new("inregs", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, regs), 6, 10),
+				new("outregs", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, regs), 8, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// void (_cdecl _interrupt far * _dos_getvect(unsigned intnum))();
+		mainProgram.APIFunctions.Add("_dos_getvect", new APIFunctionDefinition("_dos_getvect", ProgramFunctionOptionsEnum.Cdecl,
+			[new("intnum", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, new(ILBaseValueTypeEnum.Ptr32), 0, 10)));
+
+		// void _dos_setvect(unsigned intnum, void (_cdecl _interrupt far * handler)());
+		mainProgram.APIFunctions.Add("_dos_setvect", new APIFunctionDefinition("_dos_setvect", ProgramFunctionOptionsEnum.Cdecl,
+			[new("intnum", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 6, 10),
+				new("handler", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr32), 8, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.VoidValueType, 0, 10)));
+
+		// unsigned _dos_open(const char * path, unsigned mode, int * handle);
+		mainProgram.APIFunctions.Add("_dos_open", new APIFunctionDefinition("_dos_open", ProgramFunctionOptionsEnum.Cdecl,
+			[new("path", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10),
+				new("mode", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 8, 10),
+				new("handle", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.IntValueType), 10, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.UnsignedIntValueType, 0, 10)));
+
+		// unsigned _dos_close(int handle);
+		mainProgram.APIFunctions.Add("_dos_close", new APIFunctionDefinition("_dos_close", ProgramFunctionOptionsEnum.Cdecl,
+			[new("handle", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.UnsignedIntValueType, 0, 10)));
+
+		// unsigned _dos_read(int handle, void far *buffer, unsigned count, unsigned * numread);
+		mainProgram.APIFunctions.Add("_dos_read", new APIFunctionDefinition("_dos_read", ProgramFunctionOptionsEnum.Cdecl,
+			[new("handle", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10),
+				new("buffer", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr32, mainProgram.VoidValueType), 8, 10),
+				new("count", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 12, 10),
+				new("numread", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.UnsignedIntValueType), 14, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.UnsignedIntValueType, 0, 10)));
+
+		// unsigned _dos_freemem(unsigned seg); 
+		mainProgram.APIFunctions.Add("_dos_freemem", new APIFunctionDefinition("_dos_freemem", ProgramFunctionOptionsEnum.Cdecl,
+			[new("seg", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.UnsignedIntValueType, 0, 10)));
+
+		// void _dos_getdrive(unsigned * drive);
+		mainProgram.APIFunctions.Add("_dos_getdrive", new APIFunctionDefinition("_dos_getdrive", ProgramFunctionOptionsEnum.Cdecl,
+			[new("drive", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.UnsignedIntValueType), 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.VoidValueType, 0, 10)));
+
+		// unsigned _bios_disk(unsigned service, struct _diskinfo_t * diskinfo);
+		mainProgram.APIFunctions.Add("_bios_disk", new APIFunctionDefinition("_bios_disk", ProgramFunctionOptionsEnum.Cdecl,
+			[new("service", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 6, 10),
+				new("diskinfo", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, diskinfo_t), 8, 10),],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.UnsignedIntValueType, 0, 10)));
+
+		// FILE * fopen(const char * filename, const char * mode);
+		mainProgram.APIFunctions.Add("fopen", new APIFunctionDefinition("fopen", ProgramFunctionOptionsEnum.Cdecl,
 			[new("filename", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10),
-			new("mode", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 8, 10)],
-			new(ILVariableScopeEnum.LocalVariable, filePtr, 0, 10)));
+				new("mode", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 8, 10)],
+			new(ILVariableScopeEnum.ReturnValue, filePtr, 0, 10)));
+
+		// int fscanf(FILE * stream, const char * format [, argument ]...);
+		mainProgram.APIFunctions.Add("fscanf", new APIFunctionDefinition("fscanf", ProgramFunctionOptionsEnum.Cdecl | ProgramFunctionOptionsEnum.VariableArguments,
+			[new("stream", ILVariableScopeEnum.LocalParameter, filePtr, 6, 10),
+				new("format", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 8, 10),
+				new("args", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.VoidValueType), 10, 10, true)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// unsigned int fread(void * buffer, unsigned int size, unsigned int count, FILE * stream);
+		mainProgram.APIFunctions.Add("fread", new APIFunctionDefinition("fread", ProgramFunctionOptionsEnum.Cdecl,
+			[new("buffer", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.VoidValueType), 6, 10),
+				new("size", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 8, 10),
+				new("count", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 10, 10),
+				new("stream", ILVariableScopeEnum.LocalParameter, filePtr, 12, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.UnsignedIntValueType, 0, 10)));
+
+		// unsigned int fwrite(const void * buffer, unsigned int size, unsigned int count, FILE * stream);
+		mainProgram.APIFunctions.Add("fwrite", new APIFunctionDefinition("fwrite", ProgramFunctionOptionsEnum.Cdecl,
+			[new("buffer", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.VoidValueType), 6, 10),
+				new("size", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 8, 10),
+				new("count", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 10, 10),
+				new("stream", ILVariableScopeEnum.LocalParameter, filePtr, 12, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.UnsignedIntValueType, 0, 10)));
+
+		// long ftell(FILE * stream);
+		mainProgram.APIFunctions.Add("ftell", new APIFunctionDefinition("ftell", ProgramFunctionOptionsEnum.Cdecl,
+			[new("stream", ILVariableScopeEnum.LocalParameter, filePtr, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.LongValueType, 0, 10)));
+
+		// int fseek(FILE * stream, long offset, int origin);
+		mainProgram.APIFunctions.Add("fseek", new APIFunctionDefinition("fseek", ProgramFunctionOptionsEnum.Cdecl,
+			[new("stream", ILVariableScopeEnum.LocalParameter, filePtr, 6, 10),
+				new("offset", ILVariableScopeEnum.LocalParameter, mainProgram.LongValueType, 8, 10),
+				new("origin", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 12, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// int fclose(FILE *stream);
+		mainProgram.APIFunctions.Add("fclose", new APIFunctionDefinition("fclose", ProgramFunctionOptionsEnum.Cdecl,
+			[new("stream", ILVariableScopeEnum.LocalParameter, filePtr, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// int open(const char * filename, int oflag [, int pmode]); 
+		mainProgram.APIFunctions.Add("open", new APIFunctionDefinition("open", ProgramFunctionOptionsEnum.Cdecl,
+			[new("filename", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10),
+				new("oflag", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 8, 10),
+				new("pmode", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 10, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// int read(int handle, void * buffer, unsigned int count);
+		mainProgram.APIFunctions.Add("read", new APIFunctionDefinition("read", ProgramFunctionOptionsEnum.Cdecl,
+			[new("handle", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10),
+				new("buffer", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.VoidValueType), 8, 10),
+				new("count", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 10, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// int write(int handle, void * buffer, unsigned int count);
+		mainProgram.APIFunctions.Add("write", new APIFunctionDefinition("write", ProgramFunctionOptionsEnum.Cdecl,
+			[new("handle", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10),
+				new("buffer", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.VoidValueType), 8, 10),
+				new("count", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 10, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// long lseek(int handle, long offset, int origin);
+		mainProgram.APIFunctions.Add("lseek", new APIFunctionDefinition("lseek", ProgramFunctionOptionsEnum.Cdecl,
+			[new("handle", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10),
+				new("offset", ILVariableScopeEnum.LocalParameter, mainProgram.LongValueType, 8, 10),
+				new("origin", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 12, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.LongValueType, 0, 10)));
+
+		// int close(int handle);
+		mainProgram.APIFunctions.Add("close", new APIFunctionDefinition("close", ProgramFunctionOptionsEnum.Cdecl,
+			[new("handle", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// char * strcpy(char * string1, const char * string2);
+		mainProgram.APIFunctions.Add("strcpy", new APIFunctionDefinition("strcpy", ProgramFunctionOptionsEnum.Cdecl,
+			[new("string1", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10),
+				new("string2", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 8, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.StringValueType, 0, 10)));
+
+		// char * strcat(char * string1, const char * string2);
+		mainProgram.APIFunctions.Add("strcat", new APIFunctionDefinition("strcat", ProgramFunctionOptionsEnum.Cdecl,
+			[new("string1", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10),
+				new("string2", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 8, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.StringValueType, 0, 10)));
+
+		// unsigned int strlen(const char * string);
+		mainProgram.APIFunctions.Add("strlen", new APIFunctionDefinition("strlen", ProgramFunctionOptionsEnum.Cdecl,
+			[new("string", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.UnsignedIntValueType, 0, 10)));
+
+		// int strnicmp(const char * string1, const char * string2, unsigned int count);
+		mainProgram.APIFunctions.Add("strnicmp", new APIFunctionDefinition("strnicmp", ProgramFunctionOptionsEnum.Cdecl,
+			[new("string1", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10),
+				new("string2", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 8, 10),
+				new("count", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 10, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// int stricmp(const char * string1, const char * string2);
+		mainProgram.APIFunctions.Add("stricmp", new APIFunctionDefinition("stricmp", ProgramFunctionOptionsEnum.Cdecl,
+			[new("string1", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10),
+				new("string2", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 8, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// char * strstr(const char * string1, const char * string2);
+		mainProgram.APIFunctions.Add("strstr", new APIFunctionDefinition("strstr", ProgramFunctionOptionsEnum.Cdecl,
+			[new("string1", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10),
+				new("string2", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 8, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.StringValueType, 0, 10)));
+
+		// char * strupr(char * string);
+		mainProgram.APIFunctions.Add("strupr", new APIFunctionDefinition("strupr", ProgramFunctionOptionsEnum.Cdecl,
+			[new("string", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.StringValueType, 0, 10)));
+
+		// char * itoa(int value, char * string, int radix);
+		mainProgram.APIFunctions.Add("itoa", new APIFunctionDefinition("itoa", ProgramFunctionOptionsEnum.Cdecl,
+			[new("value", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10),
+				new("string", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 8, 10),
+				new("radix", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 10, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.StringValueType, 0, 10)));
+
+		// void * memcpy(void * dest, const void * src, unsigned int count);
+		mainProgram.APIFunctions.Add("memcpy", new APIFunctionDefinition("memcpy", ProgramFunctionOptionsEnum.Cdecl,
+			[new("dest", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.VoidValueType), 6, 10),
+				new("src", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.VoidValueType), 8, 10),
+				new("count", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 10, 10)],
+			new(ILVariableScopeEnum.ReturnValue, new(ILBaseValueTypeEnum.Ptr16, mainProgram.VoidValueType), 0, 10)));
+
+		// void movedata(unsigned int srcseg, unsigned int srcoff, unsigned int destseg, unsigned int destoff, unsigned int count);
+		mainProgram.APIFunctions.Add("movedata", new APIFunctionDefinition("movedata", ProgramFunctionOptionsEnum.Cdecl,
+			[new("srcseg", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 6, 10),
+				new("srcoff", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 8, 10),
+				new("destseg", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 10, 10),
+				new("destoff", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 12, 10),
+				new("count", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 14, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.VoidValueType, 0, 10)));
+
+		// void * memset(void * dest, int c, unsigned int count);
+		mainProgram.APIFunctions.Add("memset", new APIFunctionDefinition("memset", ProgramFunctionOptionsEnum.Cdecl,
+			[new("dest", ILVariableScopeEnum.LocalParameter, new(ILBaseValueTypeEnum.Ptr16, mainProgram.VoidValueType), 6, 10),
+				new("c", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 8, 10),
+				new("count", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 10, 10)],
+			new(ILVariableScopeEnum.ReturnValue, new(ILBaseValueTypeEnum.Ptr16, mainProgram.VoidValueType), 0, 10)));
+
+		// int kbhit();
+		mainProgram.APIFunctions.Add("kbhit", new APIFunctionDefinition("kbhit", ProgramFunctionOptionsEnum.Cdecl,
+			[], new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// int getch();
+		mainProgram.APIFunctions.Add("getch", new APIFunctionDefinition("getch", ProgramFunctionOptionsEnum.Cdecl,
+			[], new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// int abs(int n);
+		mainProgram.APIFunctions.Add("abs", new APIFunctionDefinition("abs", ProgramFunctionOptionsEnum.Cdecl,
+			[new("n", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// void srand(unsigned int seed);
+		mainProgram.APIFunctions.Add("srand", new APIFunctionDefinition("srand", ProgramFunctionOptionsEnum.Cdecl,
+			[new("seed", ILVariableScopeEnum.LocalParameter, mainProgram.UnsignedIntValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.VoidValueType, 0, 10)));
+
+		// int rand();
+		mainProgram.APIFunctions.Add("rand", new APIFunctionDefinition("rand", ProgramFunctionOptionsEnum.Cdecl,
+			[], new(ILVariableScopeEnum.ReturnValue, mainProgram.IntValueType, 0, 10)));
+
+		// long time(long * timer);
+		mainProgram.APIFunctions.Add("time", new APIFunctionDefinition("time", ProgramFunctionOptionsEnum.Cdecl,
+			[new("timer", ILVariableScopeEnum.LocalParameter, mainProgram.LongValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.LongValueType, 0, 10)));
+
+		// void perror(const char * string);
+		mainProgram.APIFunctions.Add("perror", new APIFunctionDefinition("perror", ProgramFunctionOptionsEnum.Cdecl,
+			[new("string", ILVariableScopeEnum.LocalParameter, mainProgram.StringValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.VoidValueType, 0, 10)));
+
+		// void exit(int status);
+		mainProgram.APIFunctions.Add("exit", new APIFunctionDefinition("exit", ProgramFunctionOptionsEnum.Cdecl,
+			[new("status", ILVariableScopeEnum.LocalParameter, mainProgram.IntValueType, 6, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.VoidValueType, 0, 10)));
+
+		// _aFlshl
+		mainProgram.APIFunctions.Add("_aFlshl", new APIFunctionDefinition("_aFlshl", ProgramFunctionOptionsEnum.CompilerInternal, [], 
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.VoidValueType, 0, 0)));
+
+		// _aFlshr
+		mainProgram.APIFunctions.Add("_aFlshr", new APIFunctionDefinition("_aFlshr", ProgramFunctionOptionsEnum.CompilerInternal, [],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.VoidValueType, 0, 0)));
+
+		// _aFlmul
+		mainProgram.APIFunctions.Add("_aFlmul", new APIFunctionDefinition("_aFlmul", ProgramFunctionOptionsEnum.Pascal, 
+			[new("multiplicand", ILVariableScopeEnum.LocalParameter, mainProgram.LongValueType, 6, 10),
+				new("multiplier", ILVariableScopeEnum.LocalParameter, mainProgram.LongValueType, 10, 10)],
+			new(ILVariableScopeEnum.ReturnValue, mainProgram.LongValueType, 0, 10)));
+
+		#endregion
 
 		Console.WriteLine("Disassembling");
 

@@ -1017,10 +1017,13 @@ namespace Disassembler
 
 										if (spInstruction == null)
 										{
-											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction at offset 0x{instruction.Offset:x} in " +
+											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction, " +
+												$"to function {function.ParentSegment.Name}.{function.Name} at offset 0x{instruction.Offset:x} in " +
 												$"function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name}");
 										}
-										else if (spInstruction.Parameters[1].Value != function.ParameterSize)
+										else if (spInstruction.Parameters[1].Value != function.ParameterSize &&
+											((function.FunctionOptions & ProgramFunctionOptionsEnum.VariableArguments) != ProgramFunctionOptionsEnum.VariableArguments ||
+											spInstruction.Parameters[1].Value < function.ParameterSize))
 										{
 											Console.WriteLine($"Warning, parameter size doesn't match function call to {function.ParentSegment.Name}.{function.Name} ({function.ParameterSize}), " +
 												$"in function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name} at offset 0x{instruction.Offset:x} ({spInstruction.Parameters[1].Value})");
@@ -1041,7 +1044,8 @@ namespace Disassembler
 
 										if (spInstruction == null)
 										{
-											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction at 0x{instruction.Offset:x} in " +
+											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction, " +
+												$"to function {function.ParentSegment.Name}.{function.Name} at offset 0x{instruction.Offset:x} in " +
 												$"function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name}");
 										}
 										else if (spInstruction.Parameters[1].Value != function.ParameterSize)
@@ -1064,7 +1068,8 @@ namespace Disassembler
 
 										if (spInstruction == null)
 										{
-											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction at 0x{instruction.Offset:x} in " +
+											Console.WriteLine($"Warning, can't find ADD SP, ? instruction ater CALL instruction, " +
+												$"to function {function.ParentSegment.Name}.{function.Name} at offset 0x{instruction.Offset:x} in " +
 												$"function {this.parentFunction.ParentSegment.Name}.{this.parentFunction.Name}");
 										}
 										else if (spInstruction.Parameters[1].Value != function.ParameterSize)
@@ -1798,8 +1803,14 @@ namespace Disassembler
 		{
 			FlowGraphLocalEnum locals = FlowGraphLocalEnum.None;
 
-			if (parameter.Size == CPUParameterSizeEnum.UInt32)
+			if (parameter.Size == CPUParameterSizeEnum.UInt32 &&
+				parameter.Type != CPUParameterTypeEnum.LocalParameter &&
+				parameter.Type != CPUParameterTypeEnum.LocalParameterWithSI &&
+				parameter.Type != CPUParameterTypeEnum.LocalParameterWithDI &&
+				parameter.Type != CPUParameterTypeEnum.LocalVariable)
+			{
 				throw new Exception("x32 addressing mode not yet implemented");
+			}
 
 			switch (parameter.Type)
 			{

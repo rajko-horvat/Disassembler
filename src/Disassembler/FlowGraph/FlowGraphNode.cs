@@ -329,7 +329,7 @@ namespace Disassembler
 
 								if (function != null)
 								{
-									if ((function.CallType & ProgramFunctionTypeEnum.Cdecl) == ProgramFunctionTypeEnum.Cdecl)
+									if ((function.FunctionOptions & ProgramFunctionOptionsEnum.Cdecl) == ProgramFunctionOptionsEnum.Cdecl)
 									{
 										if (i + 1 >= this.asmInstructions.Count)
 										{
@@ -370,13 +370,13 @@ namespace Disassembler
 											}
 										}
 									}
-									else if ((function.CallType & ProgramFunctionTypeEnum.Pascal) == ProgramFunctionTypeEnum.Pascal)
+									else if ((function.FunctionOptions & ProgramFunctionOptionsEnum.Pascal) == ProgramFunctionOptionsEnum.Pascal)
 									{
 										throw new Exception("Pascal function call not implemented");
 									}
 									else
 									{
-										throw new Exception($"Unsupported function call type '{function.CallType}'");
+										throw new Exception($"Unsupported function call type '{function.FunctionOptions}'");
 									}
 								}
 								else

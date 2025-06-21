@@ -10,6 +10,7 @@ namespace Disassembler
 	{
 		LocalVariable,
 		LocalParameter,
+		ReturnValue,
 		Global
 	}
 }

@@ -14,19 +14,13 @@ namespace Disassembler
 
 		private List<ILValueType> memberObjects = new();
 
-		public ILValueType(ILBaseValueTypeEnum baseType) : this("", baseType, ILValueType.Void, 0) { }
+		public ILValueType(ILBaseValueTypeEnum baseType) : this("", baseType, ILValueType.Void) { }
 
-		public ILValueType(string typeName, ILBaseValueTypeEnum baseType) : this(typeName, baseType, ILValueType.Void, 0) { }
+		public ILValueType(string typeName, ILBaseValueTypeEnum baseType) : this(typeName, baseType, ILValueType.Void) { }
 
-		public ILValueType(string typeName, ILBaseValueTypeEnum baseType, ILValueType referencedType) : this(typeName, baseType, referencedType, 0) { }
+		public ILValueType(ILBaseValueTypeEnum baseType, ILValueType referencedType) : this("", baseType, referencedType) { }
 
-		public ILValueType(ILBaseValueTypeEnum baseType, int arraySize) : this("", baseType, ILValueType.Void, arraySize) { }
-
-		public ILValueType(ILBaseValueTypeEnum baseType, ILValueType referencedType) : this("", baseType, referencedType, 0) { }
-
-		public ILValueType(ILBaseValueTypeEnum baseType, ILValueType referencedType, int arraySize): this("", baseType, referencedType, arraySize) { }
-
-		public ILValueType(string typeName, ILBaseValueTypeEnum baseType, ILValueType referencedType, int arraySize)
+		public ILValueType(string typeName, ILBaseValueTypeEnum baseType, ILValueType referencedType)
 		{
 			this.typeName = typeName;
 			this.baseType = baseType;
