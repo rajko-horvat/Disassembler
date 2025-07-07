@@ -21,7 +21,10 @@ namespace Disassembler
 		private int localVariableSize = 0;
 		private int localVariablePosition = 6;
 
+		private List<ProgramFunction> referenceFunctions = new();
+
 		private FlowGraph? flowGraph = null;
+		private bool translatedToIL = false;
 
 		// Assembly instructions
 		private List<CPUInstruction> asmInstructions = new List<CPUInstruction>();
@@ -1138,11 +1141,14 @@ namespace Disassembler
 						if (parameter.Type == CPUParameterTypeEnum.Immediate)
 						{
 							function = this.parentSegment.ParentProgram.FindFunction(0, this.parentSegment.CPUSegment, (ushort)parameter.Value);
+
 							if (function == null)
 							{
 								// function is not yet defined, define it
-								this.parentSegment.ParentProgram.Disassemble(0, this.parentSegment.CPUSegment, (ushort)parameter.Value, null);
+								function = this.parentSegment.ParentProgram.Disassemble(0, this.parentSegment.CPUSegment, (ushort)parameter.Value, null);
 							}
+
+							function.ReferenceFunctions.Add(this);
 						}
 						break;
 
@@ -1151,11 +1157,14 @@ namespace Disassembler
 						if (parameter.Type == CPUParameterTypeEnum.SegmentOffset)
 						{
 							function = this.parentSegment.ParentProgram.FindFunction(0, parameter.Segment, (ushort)parameter.Value);
+
 							if (function == null)
 							{
 								// function is not yet defined, define it
-								this.parentSegment.ParentProgram.Disassemble(0, parameter.Segment, (ushort)parameter.Value, null);
+								function = this.parentSegment.ParentProgram.Disassemble(0, parameter.Segment, (ushort)parameter.Value, null);
 							}
+
+							function.ReferenceFunctions.Add(this);
 						}
 						break;
 
@@ -1166,11 +1175,14 @@ namespace Disassembler
 						}
 
 						function = this.parentSegment.ParentProgram.FindFunction((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value);
+
 						if (function == null)
 						{
 							// function is not yet defined, define it
-							this.parentSegment.ParentProgram.Disassemble((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value, null);
+							function = this.parentSegment.ParentProgram.Disassemble((ushort)instruction.Parameters[0].Value, 0, (ushort)instruction.Parameters[1].Value, null);
 						}
+
+						function.ReferenceFunctions.Add(this);
 						break;
 
 					case CPUInstructionEnum.JMPF:
@@ -1315,6 +1327,8 @@ namespace Disassembler
 
 			writer.WriteLine(")");
 			writer.WriteLine($"{GetTabs(tabLevel)}{{");
+
+			writer.WriteLine($"{GetTabs(tabLevel + 1)}// This function is referenced {this.referenceFunctions.Count} time(s)");
 
 			if (this.isLibraryFunction)
 			{
@@ -2248,7 +2262,11 @@ namespace Disassembler
 
 		public int LocalStackSize { get => this.stackSize; }
 
+		public List<ProgramFunction> ReferenceFunctions { get => this.referenceFunctions; }
+
 		public FlowGraph? FlowGraph { get => this.flowGraph; }
+
+		public bool TranslatedToIL { get => this.translatedToIL; set => this.translatedToIL = value; }
 
 		public List<CPUInstruction> AsmInstructions { get => this.asmInstructions; }
 	}

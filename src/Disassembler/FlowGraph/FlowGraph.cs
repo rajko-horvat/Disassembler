@@ -10,8 +10,8 @@ namespace Disassembler
 		private string name = "";
 
 		private FlowGraphNode? startNode = null;
-		private BDictionary<uint, FlowGraphNode> endNodes = new();
-		private BDictionary<uint, FlowGraphNode> nodes = new();
+		private BDictionary<uint, FlowGraphNode> endNodes = [];
+		private BDictionary<uint, FlowGraphNode> nodes = [];
 		private bool hasBPFrame = false;
 		private bool usesSI = false;
 		private bool usesDI = false;
@@ -494,6 +494,19 @@ namespace Disassembler
 
 							if (instructionPos + 1 < instructionCount)
 							{
+								// also add ADD SP, number instruction
+								if ((instruction = this.parentFunction.AsmInstructions[instructionPos + 1]).InstructionType == CPUInstructionEnum.ADD &&
+									instruction.Parameters.Count == 2 &&
+									instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+									instruction.Parameters[0].RegisterValue == CPURegisterEnum.SP)
+								{
+									currentNode.AsmInstructions.Add(instruction);
+									instructionPos++;
+								}
+							}
+
+							if (instructionPos + 1 < instructionCount)
+							{
 								newNode = CreateOrFindNode(this.parentFunction.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
 								currentNode.ChildNodes.Add(newNode);
 							}
@@ -506,6 +519,19 @@ namespace Disassembler
 
 							if (instructionPos + 1 < instructionCount)
 							{
+								// also add ADD SP, number instruction
+								if ((instruction = this.parentFunction.AsmInstructions[instructionPos + 1]).InstructionType == CPUInstructionEnum.ADD &&
+									instruction.Parameters.Count == 2 &&
+									instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+									instruction.Parameters[0].RegisterValue == CPURegisterEnum.SP)
+								{
+									currentNode.AsmInstructions.Add(instruction);
+									instructionPos++;
+								}
+							}
+
+							if (instructionPos + 1 < instructionCount)
+							{
 								newNode = CreateOrFindNode(this.parentFunction.AsmInstructions[instructionPos + 1].LinearAddress, FlowGraphNodeTypeEnum.Block, unprocessedNodes, true);
 								currentNode.ChildNodes.Add(newNode);
 							}
@@ -515,6 +541,19 @@ namespace Disassembler
 
 						case CPUInstructionEnum.CallOverlay:
 							currentNode.AsmInstructions.Add(instruction);
+
+							if (instructionPos + 1 < instructionCount)
+							{
+								// also add ADD SP, number instruction
+								if ((instruction = this.parentFunction.AsmInstructions[instructionPos + 1]).InstructionType == CPUInstructionEnum.ADD &&
+									instruction.Parameters.Count == 2 &&
+									instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+									instruction.Parameters[0].RegisterValue == CPURegisterEnum.SP)
+								{
+									currentNode.AsmInstructions.Add(instruction);
+									instructionPos++;
+								}
+							}
 
 							if (instructionPos + 1 < instructionCount)
 							{
@@ -722,7 +761,7 @@ namespace Disassembler
 						FlowGraphNode endNode1 = endNode.ReferenceNodes[i].Value;
 						int endNode1InstructionCount = endNode1.AsmInstructions.Count;
 
-						if (endNode1InstructionCount > 1 &&
+						if (endNode1InstructionCount > 0 &&
 							(instruction = endNode1.AsmInstructions[endNode1InstructionCount - 1]).InstructionType == CPUInstructionEnum.POP &&
 							instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
 							instruction.Parameters.Count == 1 &&
@@ -758,7 +797,7 @@ namespace Disassembler
 
 						#region Adjust start and end block instruction positions
 						// move frame instructions to start and end block
-						startNode.AsmInstructions.Add((instruction = startNode1.AsmInstructions[0]));
+						startNode.AsmInstructions.Add(startNode1.AsmInstructions[0]);
 						startNode1.AsmInstructions.RemoveAt(0);
 						startNode.AsmInstructions.Add(startNode1.AsmInstructions[0]);
 						startNode1.AsmInstructions.RemoveAt(0);
@@ -798,32 +837,36 @@ namespace Disassembler
 						{
 							FlowGraphNode endNode1 = endNode.ReferenceNodes[i].Value;
 							int endNode1InstructionCount = endNode1.AsmInstructions.Count;
-							CPUInstruction instruction1 = endNode1.AsmInstructions[endNode1InstructionCount - 1];
 
-							if (!(instruction1.InstructionType == CPUInstructionEnum.MOV &&
-								instruction1.OperandSize == CPUParameterSizeEnum.UInt16 &&
-								instruction1.Parameters.Count == 2 &&
-								instruction1.Parameters[0].Type == CPUParameterTypeEnum.Register &&
-								instruction1.Parameters[0].Value == (uint)CPURegisterEnum.SP &&
-								instruction1.Parameters[1].Type == CPUParameterTypeEnum.Register &&
-								instruction1.Parameters[1].Value == (uint)CPURegisterEnum.BP))
+							if (endNode1InstructionCount > 0)
 							{
+								CPUInstruction instruction1 = endNode1.AsmInstructions[endNode1InstructionCount - 1];
+
+								if (!(instruction1.InstructionType == CPUInstructionEnum.MOV &&
+									instruction1.OperandSize == CPUParameterSizeEnum.UInt16 &&
+									instruction1.Parameters.Count == 2 &&
+									instruction1.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+									instruction1.Parameters[0].Value == (uint)CPURegisterEnum.SP &&
+									instruction1.Parameters[1].Type == CPUParameterTypeEnum.Register &&
+									instruction1.Parameters[1].Value == (uint)CPURegisterEnum.BP))
+								{
+									if (i == 0)
+									{
+										break;
+									}
+									else
+									{
+										throw new Exception($"Can't match start and end block BP frame instructions");
+									}
+								}
+
 								if (i == 0)
 								{
-									break;
+									endNode.AsmInstructions.Insert(0, instruction1);
 								}
-								else
-								{
-									throw new Exception($"Can't match start and end block BP frame instructions");
-								}
-							}
 
-							if (i == 0)
-							{
-								endNode.AsmInstructions.Insert(0, instruction1);
+								endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
 							}
-
-							endNode1.AsmInstructions.RemoveAt(endNode1InstructionCount - 1);
 						}
 
 						while (startNode1.AsmInstructions.Count > 0)
@@ -982,8 +1025,8 @@ namespace Disassembler
 			if (!this.parentFunction.IsLibraryFunction && this.hasBPFrame && this.startNode != null && this.endNodes.Count > 0)
 			{
 				UndoCompilerOptimizations();
-				TranslateToIL();
-				DetermineBasicLanguageConstructionBlocks();
+				//TranslateToIL();
+				//DetermineBasicLanguageConstructionBlocks();
 			}
 		}
 
@@ -1206,13 +1249,13 @@ namespace Disassembler
 			return spInstruction;
 		}
 
-		private void TranslateToIL()
+		public void TranslateToIL()
 		{
-			BDictionary<CPURegisterEnum, ILExpression> localRegisters = new();
-			BDictionary<CPUSegmentRegisterEnum, uint> localSegments = new();
+			BDictionary<CPURegisterEnum, ILExpression> localRegisters = [];
+			BDictionary<CPUSegmentRegisterEnum, uint> localSegments = [];
 			// track the stack state
 			// sometimes the function call doesn't adjust SP (for the length of the parameters) at the end of the function
-			Stack<ILExpression> localStack = new Stack<ILExpression>();
+			Stack<ILExpression> localStack = [];
 
 			//this.parentFunction.LocalVariables.Clear();
 
@@ -1221,7 +1264,426 @@ namespace Disassembler
 			localSegments.Add(CPUSegmentRegisterEnum.DS, this.parentFunction.ParentSegment.ParentProgram.DefaultDS);
 			localSegments.Add(CPUSegmentRegisterEnum.ES, this.parentFunction.ParentSegment.ParentProgram.DefaultDS);
 
-			this.startNode!.TranslateToIL(localRegisters, localSegments, localStack);
+			for (int i = 0; i < this.nodes.Count; i++)
+			{
+				this.nodes[i].Value.ClearIL();
+			}
+
+			this.parentFunction.TranslatedToIL = TranslateNodeToIL(this.startNode!, localRegisters, localSegments, localStack);
+		}
+
+		private bool TranslateNodeToIL(FlowGraphNode node, 
+			BDictionary<CPURegisterEnum, ILExpression> localRegisters, 
+			BDictionary<CPUSegmentRegisterEnum, uint> localSegments,
+			Stack<ILExpression> localStack)
+		{
+			bool translated = true;
+
+			if (!node.TranslatedToIL)
+			{
+				if (node.NodeType == FlowGraphNodeTypeEnum.Start)
+				{
+					// The start node doesn't need to be translated
+					node.TranslatedToIL = true;
+
+					for (int i = 0; i < node.ChildNodes.Count; i++)
+					{
+						translated &= TranslateNodeToIL(node.ChildNodes[i], localRegisters, localSegments, localStack);
+					}
+				}
+				else if (node.NodeType == FlowGraphNodeTypeEnum.End)
+				{
+					// The end node doesn't need to be translated
+					node.TranslatedToIL = true;
+
+					Console.WriteLine("End of function");
+				}
+				else
+				{
+					ProgramFunction parentFunction = this.parentFunction;
+
+					// cache and aggregate register values before commiting them to more permanent local or global variables
+					BDictionary<CPURegisterEnum, int> cachedRegisters = [];
+
+					#region Translate Assembly instructions to IL
+
+					for (int i = 0; i < node.AsmInstructions.Count; i++)
+					{
+						CPUInstruction instruction = node.AsmInstructions[i];
+						CPUParameter parameter0;
+						CPUParameter parameter1;
+						CPURegisterEnum register;
+						ILExpression variable;
+						ProgramFunction? function;
+
+						switch (instruction.InstructionType)
+						{
+							case CPUInstructionEnum.SUB:
+								parameter0 = instruction.Parameters[0];
+								parameter1 = instruction.Parameters[1];
+
+								if (parameter0.Type == CPUParameterTypeEnum.Register)
+								{
+									if (parameter0.Type == parameter1.Type && parameter0.Value == parameter1.Value)
+									{
+										register = parameter0.RegisterValue;
+										ClearCachedRegister(cachedRegisters, register);
+
+										ILExpression newValue = new ILImmediateValue(parentFunction.ParentSegment.ParentProgram.FromCPUParameterSizeEnum(parameter0.Size), 0);
+
+										if (localRegisters.ContainsKey(register))
+										{
+											localRegisters.SetValueByKey(register, newValue);
+										}
+										else
+										{
+											localRegisters.Add(register, newValue);
+										}
+
+										cachedRegisters.Add(register, node.ILInstructions.Count);
+									}
+									else
+									{
+										register = parameter0.RegisterValue;
+
+										if (localRegisters.ContainsKey(register) && cachedRegisters.ContainsKey(register))
+										{
+											ILExpression oldValue = localRegisters.GetValueByKey(register);
+											ILExpression newValue = new ILOperator(oldValue, ILOperatorEnum.Substract, ParameterToIL(localSegments, localRegisters, parameter1));
+
+											localRegisters.SetValueByKey(register, newValue);
+										}
+										else
+										{
+											throw new Exception($"Use of a undefined local register '{register}'");
+										}
+									}
+								}
+								else
+								{
+									throw new Exception($"Parameter type '{parameter0.Type}' not implemented");
+								}
+								break;
+
+							case CPUInstructionEnum.INC:
+								parameter0 = instruction.Parameters[0];
+								switch (parameter0.Type)
+								{
+									case CPUParameterTypeEnum.Register:
+										register = parameter0.RegisterValue;
+
+										if (localRegisters.ContainsKey(register))
+										{
+											node.ILInstructions.Add(new ILUnaryAssignmentOperator(localRegisters.GetValueByKey(register), ILUnaryOperatorEnum.IncrementAfter));
+										}
+										else
+										{
+											throw new Exception($"Use of a undefined local register '{register}'");
+										}
+										break;
+
+									default:
+										throw new Exception($"Parameter type '{parameter0.Type}' not implemented");
+								}
+								break;
+
+							case CPUInstructionEnum.MOV:
+								parameter0 = instruction.Parameters[0];
+
+								switch (parameter0.Type)
+								{
+									case CPUParameterTypeEnum.Register:
+										register = parameter0.RegisterValue;
+										parentFunction.LocalVariables.Add(parentFunction.LocalVariablePosition, new ILVariable(parentFunction,
+											this.parentFunction.ParentSegment.ParentProgram.IntValueType, parentFunction.LocalVariablePosition));
+										variable = new ILLocalVariableReference(parentFunction, parentFunction.LocalVariablePosition);
+
+										if (localRegisters.ContainsKey(register))
+										{
+											localRegisters.SetValueByKey(register, variable);
+										}
+										else
+										{
+											localRegisters.Add(register, variable);
+										}
+
+										node.ILInstructions.Add(new ILAssignment(variable, ParameterToIL(localSegments, localRegisters, instruction.Parameters[1])));
+
+										parentFunction.LocalVariablePosition += 2;
+										break;
+
+									default:
+										throw new Exception($"Parameter type '{parameter0.Type}' not implemented");
+								}
+								break;
+
+							case CPUInstructionEnum.PUSH:
+								localStack.Push(ParameterToIL(localSegments, localRegisters, instruction.Parameters[0]));
+								break;
+
+							case CPUInstructionEnum.CALLF:
+								parameter0 = instruction.Parameters[0];
+
+								if (parameter0.Type == CPUParameterTypeEnum.SegmentOffset)
+								{
+									function = parentFunction.ParentSegment.ParentProgram.FindFunction(0, parameter0.Segment, (ushort)parameter0.Value);
+
+									if (function != null)
+									{
+										if ((function.FunctionOptions & ProgramFunctionOptionsEnum.Cdecl) == ProgramFunctionOptionsEnum.Cdecl)
+										{
+											if (i + 1 >= node.AsmInstructions.Count)
+											{
+												// this function call is at the end of the function body, no stack adjustment available
+												List<ILExpression> parameterList = [];
+
+												while (localStack.Count > 0)
+												{
+													parameterList.Add(localStack.Pop());
+												}
+
+												node.ILInstructions.Add(new ILFunctionCall(function, parameterList));
+											}
+											else if ((instruction = node.AsmInstructions[i + 1]).InstructionType == CPUInstructionEnum.ADD &&
+												instruction.OperandSize == CPUParameterSizeEnum.UInt16 &&
+												instruction.Parameters.Count == 2 &&
+												instruction.Parameters[0].Type == CPUParameterTypeEnum.Register &&
+												instruction.Parameters[0].Value == (uint)CPURegisterEnum.SP &&
+												instruction.Parameters[1].Type == CPUParameterTypeEnum.Immediate)
+											{
+												if (instruction.Parameters[1].Value == function.ParameterSize)
+												{
+													// normal Cdecl function call
+													List<ILExpression> parameterList = [];
+
+													for (int j = 0; j < function.Parameters.Count; j++)
+													{
+														parameterList.Add(localStack.Pop());
+													}
+
+													node.ILInstructions.Add(new ILFunctionCall(function, parameterList));
+													i++;
+												}
+												else
+												{
+													throw new Exception($"The function '{function.ParentSegment.Name}.{function.Name}' " +
+														$"accepts {function.Parameters.Count} parameters, but {(instruction.Parameters[1].Value / 2)} parameters passed");
+												}
+											}
+
+											// these registers are not preserved when calling the function
+											ClearCachedRegister(cachedRegisters, CPURegisterEnum.AX);
+											ClearCachedRegister(cachedRegisters, CPURegisterEnum.BX);
+											ClearCachedRegister(cachedRegisters, CPURegisterEnum.CX);
+											ClearCachedRegister(cachedRegisters, CPURegisterEnum.DX);
+										}
+										else if ((function.FunctionOptions & ProgramFunctionOptionsEnum.Pascal) == ProgramFunctionOptionsEnum.Pascal)
+										{
+											throw new Exception("Pascal function call not implemented");
+										}
+										else
+										{
+											throw new Exception($"Unsupported function call type '{function.FunctionOptions}'");
+										}
+									}
+									else
+									{
+										throw new Exception($"Can't find the function at 0x{parameter0.Segment:x}:0x{parameter0.Value:x}");
+									}
+								}
+								else
+								{
+									throw new Exception("Indirect function call not implemented");
+								}
+								break;
+
+							default:
+								throw new Exception($"Don't know how to translate '{instruction}'");
+						}
+					}
+
+					// if any cached register is defined, define it
+
+					#endregion
+
+					#region Process child nodes
+					for (int i = 0; i < node.ChildNodes.Count; i++)
+					{
+						FlowGraphNode childNode = node.ChildNodes[i];
+
+						if (!childNode.TranslatedToIL)
+						{
+							translated &= TranslateNodeToIL(childNode, localRegisters, localSegments, localStack);
+						}
+					}
+					#endregion
+				}
+			}
+
+			return translated;
+		}
+
+		private void ClearCachedRegister(BDictionary<CPURegisterEnum, int> cache, CPURegisterEnum register)
+		{
+			if (cache.ContainsKey(register))
+			{
+				cache.RemoveByKey(register);
+			}
+		}
+
+		private ILExpression ParameterToIL(BDictionary<CPUSegmentRegisterEnum, uint> localSegments,
+			BDictionary<CPURegisterEnum, ILExpression> localRegisters, CPUParameter parameter)
+		{
+			ProgramFunction parentFunction = this.parentFunction;
+
+			switch (parameter.Type)
+			{
+				case CPUParameterTypeEnum.Immediate:
+					switch (parameter.Size)
+					{
+						case CPUParameterSizeEnum.UInt8:
+							return new ILImmediateValue(parentFunction.ParentSegment.ParentProgram.FromCPUParameterSizeEnum(parameter.Size), parameter.Value);
+
+						case CPUParameterSizeEnum.UInt16:
+							return new ILImmediateValue(parentFunction.ParentSegment.ParentProgram.FromCPUParameterSizeEnum(parameter.Size), parameter.Value);
+
+						case CPUParameterSizeEnum.UInt32:
+							return new ILImmediateValue(parentFunction.ParentSegment.ParentProgram.FromCPUParameterSizeEnum(parameter.Size), parameter.Value);
+
+						default:
+							throw new Exception($"Parameter size {parameter.Size} not implemented");
+					}
+
+				case CPUParameterTypeEnum.Register:
+					CPURegisterEnum register = parameter.RegisterValue;
+					if (localRegisters.ContainsKey(register))
+					{
+						return localRegisters.GetValueByKey(register);
+					}
+					else
+					{
+						throw new Exception($"Use of a undefined variable '{register}'");
+					}
+
+				case CPUParameterTypeEnum.LocalParameter:
+					return new ILLocalParameterReference(parentFunction, (int)parameter.Displacement);
+
+				case CPUParameterTypeEnum.LocalVariable:
+					return new ILLocalVariableReference(parentFunction, (int)parameter.Displacement);
+
+				case CPUParameterTypeEnum.MemoryAddress:
+					if (parameter.DataSegment == CPUSegmentRegisterEnum.SS)
+					{
+						switch (parameter.Value)
+						{
+							case 0: // [BX + SI]
+							case 1: // [BX + DI]
+							case 4: // [SI]
+							case 5: // [DI]
+							case 6: // [{0}]
+							case 7: // [BX]
+
+							case 8: // [{0} + BX + SI]
+							case 9: // [{0} + BX + DI]
+							case 12: // [{0} + SI]
+							case 13: // [{0} + DI]
+							case 15: // [{0} + BX]
+
+							case 16: // [{0} + BX + SI]
+							case 17: // [{0} + BX + DI]
+							case 20: // [{0} + SI]
+							case 21: // [{0} + DI]
+							case 23: // [{0} + BX]
+								throw new Exception($"The addressing type {parameter} is not supported on segment {parameter.DataSegment}");
+
+							case 2: // [BP + SI]
+								break;
+							case 3: // [BP + DI]
+								break;
+
+							case 10: // [BP {0} + SI]
+								break;
+							case 11: // [BP {0} + DI]
+								break;
+							case 14: // [BP {0}]
+								break;
+
+							case 18: // [BP {0} + SI]
+								break;
+							case 19: // [BP {0} + DI]
+								break;
+							case 22: // [BP {0}]
+								break;
+						}
+
+						throw new Exception("Not implemented");
+					}
+					else
+					{
+						if (!localSegments.ContainsKey(parameter.DataSegment))
+						{
+							throw new Exception($"The segment '{parameter.DataSegment}' is not defined");
+						}
+
+						ProgramSegment segment = parentFunction.ParentSegment.ParentProgram.FindOrCreateSegment(parentFunction.ParentSegment.CPUOverlay, (ushort)localSegments.GetValueByKey(parameter.DataSegment));
+
+						switch (parameter.Value)
+						{
+							case 2: // [BP + SI]
+							case 3: // [BP + DI]
+
+							case 10: // [BP {0} + SI]
+							case 11: // [BP {0} + DI]
+							case 14: // [BP {0}]
+
+							case 18: // [BP {0} + SI]
+							case 19: // [BP {0} + DI]
+							case 22: // [BP {0}]
+								throw new Exception($"The addressing type {parameter} is not supported on segment {parameter.DataSegment}");
+
+							case 0: // [BX + SI]
+								break;
+							case 1: // [BX + DI]
+								break;
+							case 4: // [SI]
+								break;
+							case 5: // [DI]
+								break;
+							case 6: // [{0}]
+								segment.GetOrDefineGlobalVariable(parameter.Size, parameter.Displacement);
+								return new ILGlobalVariableReference(segment, parameter.Displacement);
+							case 7: // [BX]
+								break;
+
+							case 8: // [{0} + BX + SI]
+								break;
+							case 9: // [{0} + BX + DI]
+								break;
+							case 12: // [{0} + SI]
+								break;
+							case 13: // [{0} + DI]
+								break;
+							case 15: // [{0} + BX]
+								break;
+
+							case 16: // [{0} + BX + SI]
+								break;
+							case 17: // [{0} + BX + DI]
+								break;
+							case 20: // [{0} + SI]
+								break;
+							case 21: // [{0} + DI]
+								break;
+							case 23: // [{0} + BX]
+								break;
+						}
+
+						throw new Exception("Not implemented");
+					}
+
+				default:
+					throw new Exception($"Parameter type '{parameter.Type}' not implemented");
+			}
 		}
 
 		private void DetermineBasicLanguageConstructionBlocks()
@@ -1229,8 +1691,8 @@ namespace Disassembler
 			FlowGraphNode currentNode = this.startNode!;
 			FlowGraphNode blockStartNode = this.endNodes[0].Value;
 			FlowGraphNode blockEndNode = this.endNodes[0].Value;
-			List<FlowGraphNode> nodes = new();
-			Queue<FlowGraphNode> branches = new();
+			List<FlowGraphNode> nodes = [];
+			Queue<FlowGraphNode> branches = [];
 
 			// find the first node that is referenced
 			while (currentNode.NodeType != FlowGraphNodeTypeEnum.End)
@@ -2191,7 +2653,7 @@ namespace Disassembler
 
 			if (this.startNode != null)
 			{
-				writer.WriteLine($"Start [shape=\"invhouse\", label=\"Start\\nRequires: {this.startNode.RequiredLocals.ToString()}\\nDefines: {this.startNode.DefinedLocals.ToString()}\"];");
+				writer.WriteLine($"Start [shape=\"invhouse\", label=\"Start\\nRequires: {this.startNode.RequiredLocals}\\nDefines: {this.startNode.DefinedLocals}\"];");
 			}
 			else
 			{
@@ -2208,21 +2670,21 @@ namespace Disassembler
 						break;
 
 					case FlowGraphNodeTypeEnum.Block:
-						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"box\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
+						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"box\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals}\\nDefines: {node.DefinedLocals}\"];");
 						break;
 
 					case FlowGraphNodeTypeEnum.If:
-						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"diamond\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
+						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"diamond\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals}\\nDefines: {node.DefinedLocals}\"];");
 						break;
 
 					case FlowGraphNodeTypeEnum.Switch:
-						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"hexagon\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
+						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"hexagon\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals}\\nDefines: {node.DefinedLocals}\"];");
 						break;
 
 					case FlowGraphNodeTypeEnum.DoWhile:
 					case FlowGraphNodeTypeEnum.While:
 					case FlowGraphNodeTypeEnum.For:
-						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"parallelogram\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals.ToString()}\\nDefines: {node.DefinedLocals.ToString()}\"];");
+						writer.WriteLine($"n{node.LinearAddress:x} [shape=\"parallelogram\", label=\"n{node.LinearAddress:x}\\nRequires: {node.RequiredLocals}\\nDefines: {node.DefinedLocals}\"];");
 						break;
 				}
 

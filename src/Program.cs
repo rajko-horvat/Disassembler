@@ -3,7 +3,6 @@ using Disassembler.CPU;
 using Disassembler.Formats.MZ;
 using Disassembler.Formats.OMF;
 using IRB.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 
 internal class Program
@@ -21,9 +20,9 @@ internal class Program
 
 	private static void ParseDOSEXE(string path, int version)
 	{
-		string outputPath = path + $"\\Output";
-		string codePath = outputPath + $"\\Code{version}";
-		string dataPath = outputPath + $"\\Data{version}";
+		string outputPath = path + $"{Path.DirectorySeparatorChar}Output";
+		string codePath = outputPath + $"{Path.DirectorySeparatorChar}Code{version}";
+		string dataPath = outputPath + $"{Path.DirectorySeparatorChar}Data{version}";
 
 		if (!Directory.Exists(outputPath))
 			Directory.CreateDirectory(outputPath);
@@ -35,7 +34,8 @@ internal class Program
 		// process Main code
 		Console.WriteLine("Loading EXE");
 
-		MZExecutable mainEXE = new MZExecutable($@"..\..\..\..\..\..\Civilization Games\Civ I\Dos\CIV{version}.EXE");
+		MZExecutable mainEXE = new(string.Format("..{0}..{0}..{0}..{0}..{0}..{0}Civilization Games{0}Civ I{0}Dos{0}CIV{1}.EXE", 
+			Path.DirectorySeparatorChar, version));
 
 		int baseAddress = mainEXE.InitialCS * 16;
 		ushort newDS = mainEXE.ReadUInt16(baseAddress + mainEXE.InitialIP + 0x2);
@@ -66,17 +66,18 @@ internal class Program
 		}
 
 		Console.WriteLine("Saving data segment");
-		FileStream dataFile = new FileStream($"{dataPath}\\Data.bin", FileMode.Create, FileAccess.ReadWrite);
+		FileStream dataFile = new($"{dataPath}/Data.bin", FileMode.Create, FileAccess.ReadWrite);
 		int length = Math.Min(mainEXE.Data.Length - (int)MainProgram.ToLinearAddress(newDS, 0), newSP - 1);
 		dataFile.Write(mainEXE.Data, (int)MainProgram.ToLinearAddress(newDS, 0), length);
 		dataFile.Close();
 
 		Console.WriteLine("Loading library MLIBC7");
-		OMFLibrary library1 = new OMFLibrary(@"..\..\..\..\..\..\DOS Compilers\MSC\v5\Installed\MSC\LIB\MLIBC7.LIB");
+        OMFLibrary library1 = new(string.Format("..{0}..{0}..{0}..{0}..{0}..{0}DOS Compilers{0}MSC{0}v5{0}Installed{0}MSC{0}LIB{0}MLIBC7.LIB",
+            Path.DirectorySeparatorChar));
 
-		// unique set of segment names
-		BHashSet<string> segmentNames = new BHashSet<string>();
-		BHashSet<string> groupNames = new BHashSet<string>();
+        // unique set of segment names
+        BHashSet<string> segmentNames = [];
+		BHashSet<string> groupNames = [];
 
 		for (int i = 0; i < library1.Modules.Count; i++)
 		{
@@ -110,11 +111,11 @@ internal class Program
 			Console.WriteLine(groupNames[i]);
 		}*/
 
-		List<ModuleMatch> libraryMatches = new List<ModuleMatch>();
+		List<ModuleMatch> libraryMatches = [];
 		Console.WriteLine("Matching MLIBC7");
 		OMFLibrary.MatchLibrary(library1, mainEXE, libraryMatches);
 
-		MainProgram mainProgram = new MainProgram(mainEXE, libraryMatches);
+		MainProgram mainProgram = new(mainEXE, libraryMatches);
 		mainProgram.DefaultDS = newDS;
 
 		#region MS C 5.1 API functions
@@ -593,9 +594,9 @@ internal class Program
 
 		Console.WriteLine("Writing code");
 
-		StreamWriter objectWriter = new StreamWriter($"{codePath}\\ObjectsAsm.cs");
-		StreamWriter initWriter = new StreamWriter($"{codePath}\\InitsAsm.cs");
-		StreamWriter getWriter = new StreamWriter($"{codePath}\\GettersAms.cs");
+		StreamWriter objectWriter = new($"{codePath}{Path.DirectorySeparatorChar}ObjectsAsm.cs");
+		StreamWriter initWriter = new($"{codePath}{Path.DirectorySeparatorChar}InitsAsm.cs");
+		StreamWriter getWriter = new($"{codePath}{Path.DirectorySeparatorChar}GettersAsm.cs");
 
 		mainProgram.AssignOrdinals();
 
@@ -620,19 +621,23 @@ internal class Program
 		}
 
 		// Emit flow graphs
-		if (mainProgram.Segments.ContainsKey(0x0))
-		{
-			ProgramSegment segment = mainProgram.Segments.GetValueByKey(0x0);
+		uint ilSegment = 0x181;
+		ushort ilFunction = 0x14a;
 
-			if (segment.Functions.ContainsKey(0x1080))
+		if (mainProgram.Segments.ContainsKey(ilSegment))
+		{
+			ProgramSegment segment = mainProgram.Segments.GetValueByKey(ilSegment);
+
+			if (segment.Functions.ContainsKey(ilFunction))
 			{
-				function = segment.Functions.GetValueByKey(0x1080);
+				function = segment.Functions.GetValueByKey(ilFunction);
 
 				if (function.FlowGraph != null)
 				{
 					function.FlowGraph.WriteGraphDOT("test.gv");
+					function.FlowGraph.TranslateToIL();
 				}
-			}
+            }
 		}
 
 		/*Console.WriteLine();

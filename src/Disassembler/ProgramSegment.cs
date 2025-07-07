@@ -12,8 +12,8 @@ namespace Disassembler
 		private uint segment;
 		private int ordinal = -1;
 		private string? name = null;
-		private BDictionary<int, ILVariable> globalVariables = new();
-		private BDictionary<ushort, ProgramFunction> functions = new();
+		private BDictionary<int, ILVariable> globalVariables = [];
+		private BDictionary<ushort, ProgramFunction> functions = [];
 
 		public ProgramSegment(MainProgram program, uint segment) : this(program, ProgramSegmentTypeEnum.None, segment)
 		{ }
@@ -25,7 +25,7 @@ namespace Disassembler
 
 			if (segment < 0)
 			{
-				throw new ArgumentOutOfRangeException("address", "The segment address can't be a negative value");
+				throw new ArgumentOutOfRangeException("segment", "The segment address can't be a negative value");
 			}
 
 			this.segment = segment;
@@ -47,7 +47,7 @@ namespace Disassembler
 			}
 			else
 			{
-				ILVariable variable = new ILVariable(null, ILVariableScopeEnum.Global, valueType, offset);
+				ILVariable variable = new(null, ILVariableScopeEnum.Global, valueType, offset);
 
 				this.globalVariables.Add(offset, variable);
 
@@ -57,7 +57,7 @@ namespace Disassembler
 
 		public void WriteAsmCS(string path, int verbosity)
 		{
-			StreamWriter writer = new StreamWriter($"{path}\\{this.Name}Asm.cs");
+			StreamWriter writer = new($"{path}{Path.DirectorySeparatorChar}{this.Name}Asm.cs");
 
 			if (this.functions.Count > 0)
 			{
